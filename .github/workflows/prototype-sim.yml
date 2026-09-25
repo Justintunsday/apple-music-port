@@ -6,6 +6,12 @@ on:
     branches: [main]
     paths:
       - "prototype/**"
+      - "tweak/**"
+      - ".github/workflows/prototype-sim.yml"
+  pull_request:
+    paths:
+      - "prototype/**"
+      - "tweak/**"
       - ".github/workflows/prototype-sim.yml"
 
 jobs:
@@ -17,6 +23,11 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+
+      - name: Show toolchain
+        run: |
+          xcodebuild -version
+          xcrun simctl list devices available
 
       - name: Install XcodeGen
         run: brew install xcodegen
@@ -35,21 +46,18 @@ jobs:
             build
           ls -la "build/Build/Products/Debug-iphonesimulator/"
 
-      - name: Pick a simulator (prefer iOS 26)
+      - name: Pick an available iPhone simulator
         id: sim
         run: |
           UDID=$(xcrun simctl list devices available -j \
-            | jq -r '[.devices | to_entries[] | select(.key | test("iOS-26")) | .value[] | select(.name | startswith("iPhone"))][0].udid // empty')
-          if [ -z "$UDID" ]; then
-            UDID=$(xcrun simctl list devices available -j \
-              | jq -r '[.devices | to_entries[] | .value[] | select(.name | startswith("iPhone"))][0].udid')
-          fi
+            | jq -r '[.devices | to_entries[] | .value[] | select(.name | startswith("iPhone"))][0].udid // empty')
           test -n "$UDID" && test "$UDID" != "null"
           echo "udid=$UDID" >> "$GITHUB_OUTPUT"
           xcrun simctl list devices available | grep -i "$UDID" || true
 
       - name: Boot, install, launch and screenshot
         run: |
+          set -euo pipefail
           UDID="${{ steps.sim.outputs.udid }}"
           xcrun simctl boot "$UDID" || true
           xcrun simctl bootstatus "$UDID" -b
@@ -59,12 +67,27 @@ jobs:
           APP="prototype/build/Build/Products/Debug-iphonesimulator/MusicLandscapePrototype.app"
           xcrun simctl install "$UDID" "$APP"
           xcrun simctl launch --terminate-running-process "$UDID" com.justintunsday.musiclandscape.prototype
-          sleep 6
           mkdir -p prototype/screenshots
-          xcrun simctl io "$UDID" screenshot prototype/screenshots/raw.png
-          # the app renders landscape while the simulated device stays portrait,
-          # so rotate the framebuffer back to landscape for review
-          sips -r 270 prototype/screenshots/raw.png --out prototype/screenshots/prototype.png >/dev/null
+          swiftc prototype/scripts/validate-screenshot.swift -o /tmp/validate-music-screenshot
+          for attempt in {1..10}; do
+            sleep 3
+            xcrun simctl io "$UDID" screenshot prototype/screenshots/raw.png
+            WIDTH=$(sips -g pixelWidth prototype/screenshots/raw.png | awk '/pixelWidth:/ {print $2}')
+            HEIGHT=$(sips -g pixelHeight prototype/screenshots/raw.png | awk '/pixelHeight:/ {print $2}')
+            if [ "$WIDTH" -lt "$HEIGHT" ]; then
+              sips -r 270 prototype/screenshots/raw.png --out prototype/screenshots/prototype.png >/dev/null
+            else
+              cp prototype/screenshots/raw.png prototype/screenshots/prototype.png
+            fi
+            if /tmp/validate-music-screenshot prototype/screenshots/prototype.png; then
+              echo "Screenshot validated on attempt $attempt"
+              break
+            fi
+            if [ "$attempt" -eq 10 ]; then
+              echo "Screenshot never showed artwork and track details" >&2
+              exit 1
+            fi
+          done
           ls -la prototype/screenshots
 
       - name: Upload screenshots
@@ -73,5 +96,74 @@ jobs:
         with:
           name: music-landscape-prototype
           path: prototype/screenshots/
+          if-no-files-found: error
+          retention-days: 30
+
+  injection:
+    runs-on: macos-15
+    timeout-minutes: 40
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Build simulator host and dylib
+        run: |
+          set -euo pipefail
+          cd prototype
+          xcodegen generate
+          xcodebuild \
+            -project MusicLandscapePrototype.xcodeproj \
+            -scheme MusicPortInjectionHost \
+            -configuration Debug \
+            -sdk iphonesimulator \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
+            build
+          test -f build/Build/Products/Debug-iphonesimulator/MusicPortInjectionHost.app/MusicPortSimulator.dylib
+
+      - name: Inject dylib and verify host restoration
+        run: |
+          set -euo pipefail
+          UDID=$(xcrun simctl list devices available -j \
+            | jq -r '[.devices | to_entries[] | .value[] | select(.name | startswith("iPhone"))][0].udid // empty')
+          test -n "$UDID"
+          xcrun simctl boot "$UDID" || true
+          xcrun simctl bootstatus "$UDID" -b
+          APP="prototype/build/Build/Products/Debug-iphonesimulator/MusicPortInjectionHost.app"
+          BUNDLE="com.justintunsday.musicport.injectionhost"
+          xcrun simctl install "$UDID" "$APP"
+          INSTALLED_APP=$(xcrun simctl get_app_container "$UDID" "$BUNDLE" app)
+          DYLIB="$INSTALLED_APP/MusicPortSimulator.dylib"
+          test -f "$DYLIB"
+          SIMCTL_CHILD_DYLD_INSERT_LIBRARIES="$DYLIB" \
+            xcrun simctl launch --terminate-running-process "$UDID" "$BUNDLE"
+          DATA=$(xcrun simctl get_app_container "$UDID" "$BUNDLE" data)
+          RESULT="$DATA/tmp/MusicPortSimulator.result"
+          for attempt in {1..20}; do
+            if [ -f "$RESULT" ]; then break; fi
+            sleep 2
+          done
+          if [ ! -f "$RESULT" ]; then
+            echo "Injected dylib did not write a result" >&2
+            xcrun simctl spawn "$UDID" log show --last 2m --style compact \
+              --predicate 'process == "MusicPortInjectionHost"' | tail -80 || true
+            exit 1
+          fi
+          cat "$RESULT"
+          grep -q '^PASS:' "$RESULT"
+          mkdir -p prototype/screenshots
+          xcrun simctl io "$UDID" screenshot prototype/screenshots/injection-host.png
+
+      - name: Upload injected host screenshot
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: musicport-injection-host
+          path: prototype/screenshots/injection-host.png
           if-no-files-found: warn
           retention-days: 30

@@ -1,0 +1,10 @@
+Package: com.justintunsday.musicport
+Name: MusicPort
+Version: 0.1.0
+Architecture: iphoneos-arm
+Description: Landscape full-screen player research tweak for Apple Music (Media.app).
+Homepage: https://github.com/Justintunsday/apple-music-port
+Maintainer: Justintunsday
+Author: Justintunsday
+Section: Tweaks
+Depends: mobilesubstrate
