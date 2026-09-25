@@ -1,0 +1,75 @@
+name: Prototype Simulator
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "prototype/**"
+      - ".github/workflows/prototype-sim.yml"
+
+jobs:
+  screenshot:
+    runs-on: macos-15
+    timeout-minutes: 40
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate and build prototype (simulator)
+        run: |
+          cd prototype
+          xcodegen generate
+          xcodebuild \
+            -project MusicLandscapePrototype.xcodeproj \
+            -scheme MusicLandscapePrototype \
+            -configuration Debug \
+            -sdk iphonesimulator \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
+            build
+          ls -la "build/Build/Products/Debug-iphonesimulator/"
+
+      - name: Pick a simulator (prefer iOS 26)
+        id: sim
+        run: |
+          UDID=$(xcrun simctl list devices available -j \
+            | jq -r '[.devices | to_entries[] | select(.key | test("iOS-26")) | .value[] | select(.name | startswith("iPhone"))][0].udid // empty')
+          if [ -z "$UDID" ]; then
+            UDID=$(xcrun simctl list devices available -j \
+              | jq -r '[.devices | to_entries[] | .value[] | select(.name | startswith("iPhone"))][0].udid')
+          fi
+          test -n "$UDID" && test "$UDID" != "null"
+          echo "udid=$UDID" >> "$GITHUB_OUTPUT"
+          xcrun simctl list devices available | grep -i "$UDID" || true
+
+      - name: Boot, install, launch and screenshot
+        run: |
+          UDID="${{ steps.sim.outputs.udid }}"
+          xcrun simctl boot "$UDID" || true
+          xcrun simctl bootstatus "$UDID" -b
+          xcrun simctl status_bar "$UDID" override \
+            --time "9:41" --batteryState charged --batteryLevel 100 \
+            --cellularBars 4 --wifiBars 3 || true
+          APP="prototype/build/Build/Products/Debug-iphonesimulator/MusicLandscapePrototype.app"
+          xcrun simctl install "$UDID" "$APP"
+          xcrun simctl launch --terminate-running-process "$UDID" com.justintunsday.musiclandscape.prototype
+          sleep 6
+          mkdir -p prototype/screenshots
+          xcrun simctl io "$UDID" screenshot prototype/screenshots/prototype.png
+          xcrun simctl io "$UDID" screenshot --type=png prototype/screenshots/prototype2.png
+          ls -la prototype/screenshots
+
+      - name: Upload screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: music-landscape-prototype
+          path: prototype/screenshots/
+          if-no-files-found: warn
+          retention-days: 30
