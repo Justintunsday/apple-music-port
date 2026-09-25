@@ -7,6 +7,10 @@ on:
     paths:
       - "prototype/**"
       - ".github/workflows/prototype-sim.yml"
+  pull_request:
+    paths:
+      - "prototype/**"
+      - ".github/workflows/prototype-sim.yml"
 
 jobs:
   screenshot:
@@ -17,6 +21,11 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+
+      - name: Show toolchain
+        run: |
+          xcodebuild -version
+          xcrun simctl list devices available
 
       - name: Install XcodeGen
         run: brew install xcodegen
@@ -50,6 +59,7 @@ jobs:
 
       - name: Boot, install, launch and screenshot
         run: |
+          set -euo pipefail
           UDID="${{ steps.sim.outputs.udid }}"
           xcrun simctl boot "$UDID" || true
           xcrun simctl bootstatus "$UDID" -b
@@ -59,12 +69,27 @@ jobs:
           APP="prototype/build/Build/Products/Debug-iphonesimulator/MusicLandscapePrototype.app"
           xcrun simctl install "$UDID" "$APP"
           xcrun simctl launch --terminate-running-process "$UDID" com.justintunsday.musiclandscape.prototype
-          sleep 6
           mkdir -p prototype/screenshots
-          xcrun simctl io "$UDID" screenshot prototype/screenshots/raw.png
-          # the app renders landscape while the simulated device stays portrait,
-          # so rotate the framebuffer back to landscape for review
-          sips -r 270 prototype/screenshots/raw.png --out prototype/screenshots/prototype.png >/dev/null
+          swiftc prototype/scripts/validate-screenshot.swift -o /tmp/validate-music-screenshot
+          for attempt in {1..10}; do
+            sleep 3
+            xcrun simctl io "$UDID" screenshot prototype/screenshots/raw.png
+            WIDTH=$(sips -g pixelWidth prototype/screenshots/raw.png | awk '/pixelWidth:/ {print $2}')
+            HEIGHT=$(sips -g pixelHeight prototype/screenshots/raw.png | awk '/pixelHeight:/ {print $2}')
+            if [ "$WIDTH" -lt "$HEIGHT" ]; then
+              sips -r 270 prototype/screenshots/raw.png --out prototype/screenshots/prototype.png >/dev/null
+            else
+              cp prototype/screenshots/raw.png prototype/screenshots/prototype.png
+            fi
+            if /tmp/validate-music-screenshot prototype/screenshots/prototype.png; then
+              echo "Screenshot validated on attempt $attempt"
+              break
+            fi
+            if [ "$attempt" -eq 10 ]; then
+              echo "Screenshot never showed artwork and track details" >&2
+              exit 1
+            fi
+          done
           ls -la prototype/screenshots
 
       - name: Upload screenshots
@@ -73,5 +98,5 @@ jobs:
         with:
           name: music-landscape-prototype
           path: prototype/screenshots/
-          if-no-files-found: warn
+          if-no-files-found: error
           retention-days: 30
