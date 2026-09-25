@@ -128,7 +128,7 @@ jobs:
             -derivedDataPath build \
             CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
             build
-          test -f build/Build/Products/Debug-iphonesimulator/MusicPortInjectionHost.app/Frameworks/libMusicPortSimulator.dylib
+          test -f build/Build/Products/Debug-iphonesimulator/MusicPortInjectionHost.app/MusicPortSimulator.dylib
 
       - name: Inject dylib and verify host restoration
         run: |
@@ -142,7 +142,7 @@ jobs:
           BUNDLE="com.justintunsday.musicport.injectionhost"
           xcrun simctl install "$UDID" "$APP"
           INSTALLED_APP=$(xcrun simctl get_app_container "$UDID" "$BUNDLE" app)
-          DYLIB="$INSTALLED_APP/Frameworks/libMusicPortSimulator.dylib"
+          DYLIB="$INSTALLED_APP/MusicPortSimulator.dylib"
           test -f "$DYLIB"
           SIMCTL_CHILD_DYLD_INSERT_LIBRARIES="$DYLIB" \
             xcrun simctl launch --terminate-running-process "$UDID" "$BUNDLE"
