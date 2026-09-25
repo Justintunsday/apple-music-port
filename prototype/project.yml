@@ -6,6 +6,47 @@ options:
   createIntermediateGroups: true
 
 targets:
+  MusicPortSimulator:
+    type: library.dynamic
+    platform: iOS
+    sources:
+      - path: ../tweak/MPLog.m
+      - path: ../tweak/MPHierarchyProbe.m
+      - path: ../tweak/MPPortController.m
+      - path: ../tweak/MPLandscapeHost.m
+      - path: InjectionHost/SimulatorBootstrap.m
+    settings:
+      base:
+        PRODUCT_NAME: MusicPortSimulator
+        CLANG_ENABLE_OBJC_ARC: YES
+        CODE_SIGNING_ALLOWED: NO
+        CODE_SIGNING_REQUIRED: NO
+
+  MusicPortInjectionHost:
+    type: application
+    platform: iOS
+    sources:
+      - InjectionHost/App
+    dependencies:
+      - target: MusicPortSimulator
+        embed: true
+        link: false
+        codeSign: false
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.justintunsday.musicport.injectionhost
+        PRODUCT_NAME: MusicPortInjectionHost
+        MARKETING_VERSION: "0.1.0"
+        CURRENT_PROJECT_VERSION: "1"
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_CFBundleDisplayName: MusicPort Injection Host
+        INFOPLIST_KEY_UILaunchScreen_Generation: YES
+        INFOPLIST_KEY_UISupportedInterfaceOrientations: "UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"
+        TARGETED_DEVICE_FAMILY: "1"
+        CLANG_ENABLE_OBJC_ARC: YES
+        CODE_SIGNING_ALLOWED: NO
+        CODE_SIGNING_REQUIRED: NO
+
   MusicLandscapePrototype:
     type: application
     platform: iOS
@@ -29,6 +70,10 @@ targets:
         CODE_SIGNING_REQUIRED: NO
 
 schemes:
+  MusicPortInjectionHost:
+    build:
+      targets:
+        MusicPortInjectionHost: all
   MusicLandscapePrototype:
     build:
       targets:
