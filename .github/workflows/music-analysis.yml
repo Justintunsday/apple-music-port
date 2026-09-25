@@ -1,0 +1,67 @@
+name: Music Analysis
+
+on:
+  workflow_dispatch:
+    inputs:
+      build:
+        description: "Optional build override (e.g. 24A437)"
+        required: false
+        default: ""
+  push:
+    branches: [main]
+    paths:
+      - "analysis/**"
+      - ".github/workflows/music-analysis.yml"
+
+jobs:
+  music:
+    runs-on: macos-15
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { version: "26.6.2", device: "iPhone17,3" }
+          - { version: "27.0",   device: "iPhone17,3" }
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install ipsw
+        run: |
+          brew trust blacktop/tap || true
+          brew install blacktop/tap/ipsw || brew install --cask blacktop/tap/ipsw
+          ipsw version
+
+      - name: Run Music analysis (iOS ${{ matrix.version }})
+        env:
+          OUT: out
+        run: |
+          bash analysis/run.sh "${{ matrix.version }}" "${{ inputs.build }}" "${{ matrix.device }}"
+
+      - name: Summarize (iOS ${{ matrix.version }})
+        if: always()
+        run: |
+          b="out/$(echo '${{ matrix.version }}' | tr '.' '_')"
+          {
+            echo "## iOS ${{ matrix.version }}"
+            echo ""
+            for f in "$b"/media_images.txt "$b"/str_hits.txt; do
+              [[ -f "$f" ]] || continue
+              echo "### $(basename "$f")"
+              echo '```'
+              head -80 "$f" || true
+              echo '```'
+            done
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload analysis artifacts (iOS ${{ matrix.version }})
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: music-analysis-${{ matrix.version }}
+          path: out/
+          if-no-files-found: warn
+          retention-days: 30
