@@ -1,31 +1,56 @@
 # Music landscape player port (iOS 27 -> 26.6.2)
 
-Goal: bring the iOS 27 Media/Apple Music landscape (full-screen) player to
-iOS 26.6.2 with a dylib/tweak, continuing in this repository.
+Goal: bring the iOS 27 Apple Music **landscape full-screen player** (artwork on
+the left, track info + lyrics on the right) to iOS 26.6.2 with a dylib/tweak.
 
-## What we know so far
+## App / framework map (both versions)
 
-- On iOS 26/27 the Apple Music app binary is `/Applications/Media.app/Media`
-  (not `Music.app`), accompanied by `MusicUIService`, `MediaRemoteUI` and
+- The Apple Music app binary is `/Applications/Media.app/Media`
+  (not `Music.app`); helpers: `MusicUIService`, `MediaRemoteUI`,
   `MediaRemoteUIService`.
-- The four app binaries were extracted from both OS volumes (26.6.2 build
-  23G90, 27.0 build 24A437). Both versions link the **same 38 dylibs**, and the
-  app binaries expose no landscape/player classes themselves - the UI lives in
-  frameworks.
-- `MediaCoreUI.framework` is the prime candidate: it is imported by `Media`
-  and hosts the media now-playing / full-screen player UI.
-- Framework binaries are not on the filesystem, only inside the DSC, so the
-  `Music Analysis` workflow downloads the DSC and extracts:
-  `MediaCoreUI`, `MediaPlayer`, `MusicKit`, `MediaControls`, plus a
-  Media/Music image inventory and landscape/full-screen string search.
-- Local DSC copies are missing the `.dyldlinkedit` subcache, and the local
-  Python (dissect) extraction of the cryptex linkedit hits an LZBITMAP bug, so
-  framework extraction is done on CI (macOS) instead.
+- `Media.app` links the **same 38 dylibs** on 26.6.2 and 27.0; the UI lives in
+  frameworks:
+  - full-screen now-playing UI -> `MediaCoreUI.framework`
+  - lyrics rendering -> `MediaPlayer.framework` (600+ `*yric*` symbols)
+  - `MediaControls.framework` (transport / now-playing controls)
+  - `MusicUI.framework` exists in the cache but is not linked by `Media.app`
+- Both `Media.app` Info.plists already allow portrait + landscape.
 
-## Next steps
+## What iOS 27 adds in MediaCoreUI (26.6.2 -> 27.0: +0.8 MB, +444 symbols)
 
-1. Run `Music Analysis`, download `music-analysis-26.6.2` / `-27.0`.
-2. Diff `MediaCoreUI` symbols/strings between the two versions; find the
-   landscape/full-screen player types that are new in 27.
-3. Decide the port mechanism (new UI code in a tweak vs. selectively loading
-   extracted 27.0 components) and prototype behind a feature flag.
+`DeviceMetrics` is the layout model:
+
+| | 26.6.2 | 27.0 |
+|---|---|---|
+| `Layout` cases | `regular`, `compact`, `regularExtended` | + **`compactLandscape`** |
+| `Layout` helpers | `horizontalMargins` | + `isCompact` |
+| `DeviceMetrics` fields | `safeAreaInsets`, `userInterfaceIdiom`, `size` | `layoutMargins`, `size`, **`isFullSizeArtworkAlwaysDisplayed`** |
+
+Additionally new in 27.0 (no counterpart in 26.6.2):
+
+- the UIKit import `__UIEnhancedLandscapeEnabled` and the
+  `"EnhancedFullBleed"` effect path, both only present in 27.0
+- `NowPlayingCustomArtworkBackground{View,Layer,EffectLayer,ReplicatorLayer}`,
+  `NowPlayingArtworkBackgroundEffect`
+- `NowPlayingViewModel.{BackgroundArtwork, MiniPlayerNotice, Markers,
+  EyebrowConfiguration}`, `NowPlayingTimeControlState` (+`Clock`,
+  `Strings.TimestampCache`), `NowPlayingSpeedPicker` / `PreciseSpeedPickerModel`
+  ("Playback Speed Slider"), `NowPlayingFooterLayout`,
+  `MediaTimelineControl` markers, `WaveformLayer` / `BouncyBarsAsset` /
+  `WaveformDataController`, `MetalVideoTextureProvider`
+
+## Port plan (proposal)
+
+1. **Instrumentation first**: build a tweak that injects into the Music process
+   and logs the full-screen player's view hierarchy / constraints in landscape
+   on 26.6.2, plus the `DeviceMetrics.layout` classification. This avoids
+   guessing the existing hierarchy.
+2. **Layout port**: hook the now-playing presentation and, in landscape, arrange
+   the existing artwork / metadata / lyrics views side by side like the iOS 27
+   screenshot (feature-flagged, reversible).
+3. Optional later: port the 27-only components (custom artwork background,
+   speed picker, timeline markers) one by one.
+
+Tooling available in this repo: `analysis/run.sh` (CI DSC extraction) and the
+`Music Analysis` workflow (macOS) that produces `music-analysis-<ver>`
+artifacts with MediaCoreUI / MediaPlayer / MusicKit / MediaControls.

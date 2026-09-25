@@ -53,6 +53,7 @@ IMAGES=(
   "/System/Library/Frameworks/MediaPlayer.framework/MediaPlayer"
   "/System/Library/Frameworks/MusicKit.framework/MusicKit"
   "/System/Library/PrivateFrameworks/MediaControls.framework/MediaControls"
+  "/System/Library/PrivateFrameworks/MusicUI.framework/MusicUI"
 )
 for img in "${IMAGES[@]}"; do
   name="$(basename "$img")"
