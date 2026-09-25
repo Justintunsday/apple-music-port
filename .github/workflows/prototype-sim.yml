@@ -61,8 +61,10 @@ jobs:
           xcrun simctl launch --terminate-running-process "$UDID" com.justintunsday.musiclandscape.prototype
           sleep 6
           mkdir -p prototype/screenshots
-          xcrun simctl io "$UDID" screenshot prototype/screenshots/prototype.png
-          xcrun simctl io "$UDID" screenshot --type=png prototype/screenshots/prototype2.png
+          xcrun simctl io "$UDID" screenshot prototype/screenshots/raw.png
+          # the app renders landscape while the simulated device stays portrait,
+          # so rotate the framebuffer back to landscape for review
+          sips -r 270 prototype/screenshots/raw.png --out prototype/screenshots/prototype.png >/dev/null
           ls -la prototype/screenshots
 
       - name: Upload screenshots
