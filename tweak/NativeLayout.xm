@@ -48,13 +48,21 @@ static BOOL MLCompactLyricLabel(UILabel *label) {
     return NO;
 }
 
+static CGFloat MLMaxLyricFontSize(void) {
+    CGSize size = MLActivePlayer.viewIfLoaded.window.bounds.size;
+    CGFloat maximum = 26;
+    if (size.width > size.height && isfinite(size.height) && size.height > 0)
+        maximum = fmax(18, fmin(26, size.height * .06));
+    return maximum;
+}
 static UIFont *MLLyricFont(UILabel *label, UIFont *font) {
     if (!font || !MLCompactLyricLabel(label)) return font;
     if (!objc_getAssociatedObject(label, &MLOriginalLyricFontKey))
         objc_setAssociatedObject(label, &MLOriginalLyricFontKey, font, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     if (!MLChangedLyricLabels) MLChangedLyricLabels = [NSHashTable weakObjectsHashTable];
     [MLChangedLyricLabels addObject:label];
-    return font.pointSize > 26 ? [font fontWithSize:26] : font;
+    CGFloat maximum = MLMaxLyricFontSize();
+    return font.pointSize > maximum ? [font fontWithSize:maximum] : font;
 }
 
 static void MLUpdateLyricLabels(UIView *view) {

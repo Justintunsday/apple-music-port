@@ -1,8 +1,8 @@
 Package: com.justintunsday.musiclandscape
 Name: Music Landscape Native
-Version: 0.4.0~compact27-1
+Version: 0.5.0~se2ios27-1
 Architecture: iphoneos-arm64
-Description: iOS 27 compact-landscape layout structure adapted to native iOS 16.1.1 Music views on verified images. Other versions retain diagnostics only.
+Description: iPhone SE 2 iOS 27 compact-landscape structure applied to native iOS 16.1.1 Music views using the 32-point compact margins and right-column controls. Other versions retain diagnostics only.
 Maintainer: Justintunsday
 Author: Justintunsday
 Section: Tweaks
