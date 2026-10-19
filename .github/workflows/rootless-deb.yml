@@ -1,0 +1,63 @@
+name: Build Rootless Deb
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'tweak/**'
+      - '.github/workflows/rootless-deb.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: macos-15
+    timeout-minutes: 30
+    env:
+      THEOS: ${{ github.workspace }}/.theos-toolchain
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install build dependencies
+        run: brew install ldid dpkg
+      - name: Install Theos
+        run: git clone --recursive --depth 1 https://github.com/theos/theos.git "$THEOS"
+      - name: Build rootless package (iOS 16 and 26)
+        run: |
+          set -o pipefail
+          xcodebuild -version
+          xcrun --sdk iphoneos --show-sdk-version
+          git -C "$THEOS" rev-parse HEAD
+          make -C tweak clean package FINALPACKAGE=1 THEOS_PACKAGE_SCHEME=rootless 2>&1 | tee build.log
+      - name: Verify package and Mach-O
+        run: |
+          set -euo pipefail
+          DEB=$(find tweak/packages -name '*.deb' -print -quit)
+          test -n "$DEB"
+          test "$(dpkg-deb -f "$DEB" Architecture)" = iphoneos-arm64
+          mkdir -p package-check
+          dpkg-deb -x "$DEB" package-check
+          DYLIB=package-check/var/jb/Library/MobileSubstrate/DynamicLibraries/MusicLandscape.dylib
+          test -f "$DYLIB"
+          test -f package-check/var/jb/Library/MobileSubstrate/DynamicLibraries/MusicLandscape.plist
+          test ! -d package-check/Library
+          lipo -verify_arch arm64 arm64e "$DYLIB"
+          xcrun vtool -show-build "$DYLIB" | tee macho-build.txt
+          grep -q 'minos 16.0' macho-build.txt
+          otool -L "$DYLIB" | tee macho-libraries.txt
+          dpkg-deb -I "$DEB"
+          dpkg-deb -c "$DEB"
+          shasum -a 256 "$DEB" > "$DEB.sha256"
+      - name: Upload deb and build diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: music-landscape-rootless-ios16-ios26
+          path: |
+            tweak/packages/*.deb
+            tweak/packages/*.sha256
+            build.log
+            macho-*.txt
+          if-no-files-found: error
+          retention-days: 30
