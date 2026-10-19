@@ -155,7 +155,7 @@ static void MLRequestRotation(BOOL leaving) {
 - (void)viewDidLayoutSubviews {
     if (!MLLandscape(self)) { MLRestoreLyricFonts(); MLRestoreCompactTree(self); }
     %orig;
-    if (MLHasHostedContent(self)) MLRestoreCompactTree(self);
+    MLUpdateHostedLayout(self);
 }
 - (void)viewWillDisappear:(BOOL)animated {
     if (self == MLActivePlayer) {
@@ -168,6 +168,11 @@ static void MLRequestRotation(BOOL leaving) {
 }
 %end
 %hook MLLegacyControls
+- (void)setControlsHidden:(BOOL)hidden animator:(id)animator {
+    BOOL adjusted = hidden;
+    if (MLInNativePlayer(self) && MLLandscape(self) && MLHasHostedContent(MLActivePlayer)) adjusted = NO;
+    %orig(adjusted, animator);
+}
 - (UITraitCollection *)traitCollection {
     UITraitCollection *original = %orig;
     return MLPhoneTraits(self, original);

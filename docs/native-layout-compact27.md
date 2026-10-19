@@ -45,8 +45,8 @@ tests check containment, control ordering, and non-overlap at SE 2 dimensions.
 
 Existing boundary constraints keep their native active/inactive mode choices.
 Their priorities are temporarily lowered while the adaptation's constraints are
-active. Original priorities and autoresizing settings are restored for portrait,
-visible native lyrics/queue content and dismissal. Descendant button/slider
+active. Original priorities and autoresizing settings are restored for portrait
+and dismissal. Descendant button/slider
 behavior, audio routing and lyric synchronization remain Apple's implementation.
 
 ## Limits
@@ -57,3 +57,26 @@ renderer and presentation behavior. Private hierarchy assumptions are guarded;
 an unexpected hierarchy leaves native geometry unchanged. Actual constraint
 resolution, mode transitions, rendering and hit testing require phone validation.
 The package does not enable iOS 26 or iOS 27 installation support.
+
+## 0.5.1 hosted-content controls follow-up
+
+The device screenshot showed full-width native lyrics and metadata, but no
+scrubber, transport, volume or lyrics/queue footer. Earlier code explicitly
+removed compact constraints when hosted content was visible, leaving iOS 16's
+full-screen lyric presentation in charge of the whole height.
+
+This revision gives hosted lyrics/queue their own geometry: on a 667 x 375 screen,
+the native content branch ends at y=243, the native scrubber occupies y=251..287,
+and native transport, volume, route and lyrics/queue controls occupy y=299..343.
+The metadata header and native lyric renderer remain intact. No controls are
+created or reparented. The native `setControlsHidden:animator:` entry verified at
+0x5a96e0 (Swift implementation 0x5a8ea8) is called to expose the existing controls
+on entry; hide requests are suppressed only while this player's landscape
+hosted content is visible. The previous unconditional restore on the parent
+layout path is removed. Portrait and dismissal still restore native geometry.
+
+Mode, bounds and safe-area changes rebuild the scoped constraint state instead
+of retaining rectangles from the previous mode. The host branch is never chosen
+if it contains the playback-controls controller. Geometry tests cover SE 2,
+safe areas and separation between content and all control hit areas. Actual
+visibility, gesture behavior and rendering still need real-device verification.

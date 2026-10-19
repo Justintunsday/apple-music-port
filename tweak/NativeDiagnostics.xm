@@ -139,7 +139,7 @@ static NSDictionary *MLCapture(NSString *reason) {
     if (MLExporting) return;
     [self record:@"manual-export"];
     MLExporting = YES;
-    NSDictionary *report = @{@"schema":@1, @"version":@"0.2.0~diagnostics1", @"mode":@"native-layout-diagnostics-only",
+    NSDictionary *report = @{@"schema":@1, @"version":@"0.5.1~lyrics-controls1", @"mode":@"native-compact-layout-with-diagnostics",
         @"privacy":@"Classes, geometry and constraints; no label text, lyric text, artwork, accounts or playback metadata.", @"snapshots":[MLSnapshots copy]};
     __weak UIWindow *sourceWindow = (UIWindow *)gesture.view;
     dispatch_async(dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^{

@@ -5,6 +5,23 @@
 
 static int close_enough(double a, double b) { return fabs(a - b) < .01; }
 
+static void check_hosted(double width, double height, double l, double r, double t, double b) {
+    MLHostedGeometry g;
+    assert(MLMakeHostedGeometry(width, height, l, r, t, b, &g));
+    MLRect rects[] = {g.time, g.transport, g.volume, g.footer, g.route};
+    for (unsigned i=0; i<sizeof(rects)/sizeof(*rects); i++) {
+        MLRect rect=rects[i];
+        assert(rect.x>=l && rect.y>=t && rect.width>0 && rect.height>0);
+        assert(rect.x+rect.width<=width-r && rect.y+rect.height<=height-b);
+        assert(g.lyrics.y+g.lyrics.height<rect.y);
+    }
+    assert(g.time.y+g.time.height < g.transport.y);
+    assert(g.transport.x+g.transport.width < g.volume.x);
+    assert(g.volume.x+g.volume.width < g.route.x);
+    assert(g.route.x+g.route.width < g.footer.x);
+    assert(g.transport.width>=200 && g.footer.width>=120);
+}
+
 static void check(double width, double height, double l, double r, double t, double b) {
     MLCompactGeometry g;
     assert(MLMakeCompactGeometry(width, height, l, r, t, b, &g));
@@ -25,6 +42,14 @@ static void check(double width, double height, double l, double r, double t, dou
     assert(g.route.x > g.artwork.x + g.artwork.width);
 }
 int main(void) {
+    check_hosted(667,375,0,0,0,0);
+    check_hosted(667,375,0,0,20,0);
+    check_hosted(736,414,0,0,0,0);
+    check_hosted(844,390,47,47,0,21);
+    MLHostedGeometry hosted;
+    assert(!MLMakeHostedGeometry(375,667,0,0,0,0,&hosted));
+    assert(!MLMakeHostedGeometry(667,280,0,0,0,0,&hosted));
+    assert(!MLMakeHostedGeometry(667,375,0,0,0,NAN,&hosted));
     check(667, 375, 0, 0, 0, 0);   // iPhone SE 2, both landscape directions.
     check(736, 414, 0, 0, 0, 0);
     check(844, 390, 47, 47, 0, 21);

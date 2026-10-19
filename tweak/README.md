@@ -1,6 +1,6 @@
-# 0.4.0 compact-landscape adapter for iOS 16.1.1
+# 0.5.1 compact-landscape adapter for iOS 16.1.1
 
-Install the rootless `0.4.0~compact27-1` deb, then fully close and reopen Music.
+Install the rootless `0.5.1~lyrics-controls1` deb, then fully close and reopen Music.
 Test normal playback in both landscape directions, then open/close native lyrics
 and queue, return to portrait and dismiss the player. Disable other Music layout
 tweaks during this comparison. Lyrics use a maximum 26-point native font.

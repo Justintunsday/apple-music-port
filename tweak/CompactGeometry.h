@@ -4,6 +4,24 @@
 
 typedef struct { double x, y, width, height; } MLRect;
 typedef struct { MLRect artwork, metadata, time, transport, volume, footer, route, routeLabel; } MLCompactGeometry;
+typedef struct { MLRect lyrics, time, transport, volume, footer, route; } MLHostedGeometry;
+
+static inline bool MLMakeHostedGeometry(double width, double height, double left, double right,
+                                        double top, double bottom, MLHostedGeometry *g) {
+    if (!g || !isfinite(width) || !isfinite(height) || !isfinite(left) || !isfinite(right) ||
+        !isfinite(top) || !isfinite(bottom) || left < 0 || right < 0 || top < 0 || bottom < 0 ||
+        width <= height || width-left-right < 600 || height-top-bottom < 320) return false;
+    double x = left+32, end = width-right-32, row = height-bottom-76;
+    double footerX = end-120, routeX = footerX-60, volumeX = x+216;
+    if (routeX-16-volumeX < 100) return false;
+    g->lyrics = (MLRect){0, 0, width, height-bottom-132};
+    g->time = (MLRect){x, row-48, end-x, 36};
+    g->transport = (MLRect){x, row, 200, 44};
+    g->volume = (MLRect){volumeX, row+6, routeX-16-volumeX, 32};
+    g->route = (MLRect){routeX, row, 44, 44};
+    g->footer = (MLRect){footerX, row, 120, 44};
+    return true;
+}
 
 // iOS 27.0.1 MediaCoreUI DeviceMetrics.Layout.horizontalMargins:
 // compact 32, compactLandscape 32, regular 78, regularExtended 52.

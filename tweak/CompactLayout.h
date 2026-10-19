@@ -8,6 +8,9 @@ static char MLCompactStateKey;
 @property(nonatomic, strong) NSArray<UIView *> *targets;
 @property(nonatomic, strong) NSArray<NSValue *> *targetRects;
 @property(nonatomic, strong) NSArray<UIView *> *ancestors;
+@property(nonatomic) BOOL hosted;
+@property(nonatomic) CGSize canvasSize;
+@property(nonatomic) UIEdgeInsets safeArea;
 @end
 @implementation MLCompactState
 @end
@@ -69,26 +72,43 @@ static BOOL MLIsRelated(UIView *a, UIView *b) {
 static void MLApplyCompact(UIViewController *controller) {
     UIView *root = controller.viewIfLoaded;
     MLCompactGeometry geometry;
+    MLHostedGeometry hostedGeometry;
+    BOOL hosted = MLHasHostedContent(MLActivePlayer);
     UIEdgeInsets safe = root.safeAreaInsets;
-    if (!MLInNativePlayer(controller) || !MLLandscape(controller) || MLHasHostedContent(MLActivePlayer) ||
-        !MLMakeCompactGeometry(root.bounds.size.width, root.bounds.size.height, safe.left, safe.right,
-                               safe.top, safe.bottom, &geometry)) { MLRestoreCompact(controller); return; }
+    BOOL valid = hosted ? MLMakeHostedGeometry(root.bounds.size.width, root.bounds.size.height, safe.left, safe.right,
+                                               safe.top, safe.bottom, &hostedGeometry) :
+                          MLMakeCompactGeometry(root.bounds.size.width, root.bounds.size.height, safe.left, safe.right,
+                                                safe.top, safe.bottom, &geometry);
+    if (!MLInNativePlayer(controller) || !MLLandscape(controller) || !valid) { MLRestoreCompact(controller); return; }
     MLCompactState *state = objc_getAssociatedObject(controller, &MLCompactStateKey);
+    if (state && (state.hosted != hosted || !CGSizeEqualToSize(state.canvasSize, root.bounds.size) ||
+                  !UIEdgeInsetsEqualToEdgeInsets(state.safeArea, safe))) {
+        MLRestoreCompact(controller);
+        state = nil;
+    }
     if (!state) {
+        if (hosted) {
+            geometry.time = hostedGeometry.time;
+            geometry.transport = hostedGeometry.transport;
+            geometry.volume = hostedGeometry.volume;
+            geometry.footer = hostedGeometry.footer;
+            geometry.route = hostedGeometry.route;
+        }
         struct { const char *name; MLRect rect; bool required; } specs[] = {
-            {"artworkView", geometry.artwork, true},
-            {"topContainerView", geometry.metadata, true},
+            {"artworkView", hosted ? (MLRect){0,0,0,0} : geometry.artwork, !hosted},
+            {"topContainerView", hosted ? (MLRect){0,0,0,0} : geometry.metadata, !hosted},
             {"timeControl", geometry.time, true},
             {"transportControlsStackView", geometry.transport, true},
             {"volumeSlider", geometry.volume, true},
             {"bottomButtonsStackView", geometry.footer, false},
             {"routeButton", geometry.route, false},
-            {"routeLabel", geometry.routeLabel, false},
+            {"routeLabel", hosted ? (MLRect){0,0,0,0} : geometry.routeLabel, false},
         };
         NSMutableArray<UIView *> *targets = [NSMutableArray array];
         NSMutableArray<NSValue *> *rects = [NSMutableArray array];
         NSMutableOrderedSet<UIView *> *ancestors = [NSMutableOrderedSet orderedSet];
         for (size_t index = 0; index < sizeof(specs) / sizeof(specs[0]); index++) {
+            if (specs[index].rect.width <= 0) continue;
             UIView *view = MLNativeView(controller, specs[index].name);
             if (!view || view == root || ![view isDescendantOfView:root]) {
                 if (specs[index].required) { MLRestoreCompact(controller); return; }
@@ -109,6 +129,9 @@ static void MLApplyCompact(UIViewController *controller) {
         for (UIView *view in targets)
             if ([ancestors containsObject:view]) { MLRestoreCompact(controller); return; }
         state = [MLCompactState new];
+        state.hosted = hosted;
+        state.canvasSize = root.bounds.size;
+        state.safeArea = safe;
         state.targets = targets;
         state.targetRects = rects;
         state.ancestors = ancestors.array;
@@ -160,4 +183,109 @@ static void MLApplyCompact(UIViewController *controller) {
         }
     }
     [NSLayoutConstraint activateConstraints:state.constraints];
+}
+
+@protocol MLNativeControlsVisibility <NSObject>
+- (void)setControlsHidden:(BOOL)hidden animator:(id)animator;
+@end
+static char MLHostedControlsShownKey;
+static UIViewController *MLFindControls(UIViewController *parent) {
+    Class nativeClass = NSClassFromString(@"MusicNowPlayingControlsViewController");
+    if (nativeClass && [parent isKindOfClass:nativeClass]) return parent;
+    for (UIViewController *child in parent.childViewControllers) {
+        UIViewController *result = MLFindControls(child);
+        if (result) return result;
+    }
+    return nil;
+}
+static UIViewController *MLFindHostedController(UIViewController *parent) {
+    for (UIViewController *child in parent.childViewControllers) {
+        UIView *view = child.viewIfLoaded;
+        if (!view.superview || view.hidden || view.alpha <= .01) continue;
+        BOOL hiddenAncestor = NO;
+        for (UIView *ancestor = view.superview; ancestor && ancestor != MLActivePlayer.viewIfLoaded; ancestor = ancestor.superview)
+            if (ancestor.hidden || ancestor.alpha <= .01) { hiddenAncestor = YES; break; }
+        if (hiddenAncestor) continue;
+        if (!CGRectIntersectsRect([view convertRect:view.bounds toView:MLActivePlayer.viewIfLoaded],
+                                  MLActivePlayer.viewIfLoaded.bounds)) continue;
+        NSString *name = NSStringFromClass(child.class);
+        if ([name containsString:@"LyricsViewController"] || [name containsString:@"QueueViewController"]) return child;
+        UIViewController *result = MLFindHostedController(child);
+        if (result) return result;
+    }
+    return nil;
+}
+static void MLRestoreHostedContentTree(UIViewController *controller, UIViewController *controls) {
+    if (controller != controls) MLRestoreCompact(controller);
+    for (UIViewController *child in controller.childViewControllers) MLRestoreHostedContentTree(child, controls);
+}
+static void MLUpdateHostedLayout(UIViewController *player) {
+    UIViewController *controls = MLFindControls(player);
+    UIViewController *content = MLHasHostedContent(player) ? MLFindHostedController(player) : nil;
+    UIView *root = player.viewIfLoaded;
+    MLHostedGeometry geometry;
+    UIEdgeInsets safe = root.safeAreaInsets;
+    if (!controls || !content || !MLInNativePlayer(player) || !MLLandscape(player) ||
+        !MLMakeHostedGeometry(root.bounds.size.width, root.bounds.size.height, safe.left, safe.right,
+                              safe.top, safe.bottom, &geometry)) {
+        MLRestoreHostedContentTree(player, controls);
+        if (controls) objc_setAssociatedObject(controls, &MLHostedControlsShownKey, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        return;
+    }
+    // Use the native visibility method rather than exposing isolated descendants
+    // whose ancestor could still be transparent or noninteractive.
+    if (!objc_getAssociatedObject(controls, &MLHostedControlsShownKey) &&
+        [controls respondsToSelector:@selector(setControlsHidden:animator:)]) {
+        objc_setAssociatedObject(controls, &MLHostedControlsShownKey, @YES, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        [(id<MLNativeControlsVisibility>)controls setControlsHidden:NO animator:nil];
+    }
+    UIView *host = content.viewIfLoaded;
+    if (![host isDescendantOfView:root]) return;
+    // Resize only the hosted branch. Never shrink a container that also owns
+    // playback controls, and keep all native controllers/views in their parents.
+    while (host.superview && host.superview != root &&
+           ![controls.viewIfLoaded isDescendantOfView:host.superview]) host = host.superview;
+    MLCompactState *state = objc_getAssociatedObject(content, &MLCompactStateKey);
+    if (state && (state.targets.firstObject != host || !CGSizeEqualToSize(state.canvasSize, root.bounds.size) ||
+                  !UIEdgeInsetsEqualToEdgeInsets(state.safeArea, safe))) {
+        MLRestoreCompact(content);
+        state = nil;
+    }
+    if (!state) {
+        state = [MLCompactState new];
+        state.hosted = YES;
+        state.canvasSize = root.bounds.size;
+        state.safeArea = safe;
+        state.targets = @[host];
+        state.masks = [NSMapTable weakToStrongObjectsMapTable];
+        [state.masks setObject:@(host.translatesAutoresizingMaskIntoConstraints) forKey:host];
+        host.translatesAutoresizingMaskIntoConstraints = NO;
+        state.priorities = [NSMapTable weakToStrongObjectsMapTable];
+        state.constraints = MLPinRect(host, root, geometry.lyrics);
+        for (NSLayoutConstraint *constraint in state.constraints) {
+            constraint.priority = 999;
+            constraint.identifier = @"MusicLandscape.HostedContent";
+        }
+        NSMutableArray *owners = [NSMutableArray arrayWithObject:host];
+        for (UIView *owner = host.superview; owner; owner = owner.superview) {
+            [owners addObject:owner];
+            if (owner == root) break;
+        }
+        state.ancestors = owners;
+        objc_setAssociatedObject(content, &MLCompactStateKey, state, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    }
+    for (UIView *owner in state.ancestors) {
+        for (NSLayoutConstraint *constraint in owner.constraints) {
+            if ([constraint.identifier isEqualToString:@"MusicLandscape.HostedContent"] ||
+                [state.priorities objectForKey:constraint] ||
+                (constraint.firstItem != host && constraint.secondItem != host)) continue;
+            [state.priorities setObject:@(constraint.priority) forKey:constraint];
+            BOOL active = constraint.active;
+            if (active) constraint.active = NO;
+            constraint.priority = 249;
+            if (active) constraint.active = YES;
+        }
+    }
+    [NSLayoutConstraint activateConstraints:state.constraints];
+    MLApplyCompact(controls);
 }

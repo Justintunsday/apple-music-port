@@ -1,14 +1,14 @@
 # Native Apple Music landscape layout
 
-**0.4.0~compact27-1 targets iPhone SE 2 on iOS 16.1.1 (20B101).**
+**0.5.1~lyrics-controls1 targets iPhone SE 2 on iOS 16.1.1 (20B101).**
 It adapts the iOS 27 phone compact-landscape composition to the existing iOS 16
 player: artwork at the left, metadata and controls at the right, native lyrics
-and queue as hosted content. Native lyric fonts are capped at 26 points in landscape.
+and queue as hosted content. Native lyric fonts adapt to landscape height (22.5 points on SE 2).
 
 Unlike 0.3.x, it does not select the tablet regularExtended layout or change its
 1024-point threshold. Existing UIKit views, actions, scrubbers and lyric timing
 are retained. Only geometry constraints are overridden, with native priorities
-and autoresizing settings restored on portrait, hosted-content mode or dismissal.
+and autoresizing settings restored on portrait or dismissal; lyrics and queue receive a reserved control bar.
 
 See [compact-layout evidence and limits](docs/native-layout-compact27.md),
 [earlier iOS 16 investigation](docs/native-layout-ios16.md) and [usage](tweak/README.md).
