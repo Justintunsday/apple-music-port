@@ -25,7 +25,9 @@ jobs:
           test ! -f tweak/Tweak.xm
           clang -std=c11 -Wall -Wextra -Werror tests/native-policy.c -o /tmp/music-native-policy
           /tmp/music-native-policy
-          if grep -Eq 'MPMusicPlayerController|MRMediaRemote|addSubview:|insertSubview:|removeFromSuperview|setFrame:|activateConstraints:' tweak/NativeLayout.xm; then
+          clang -std=c11 -Wall -Wextra -Werror tests/compact-geometry.c -o /tmp/music-compact-geometry
+          /tmp/music-compact-geometry
+          if grep -Eq 'MPMusicPlayerController|MRMediaRemote|addSubview:|insertSubview:|removeFromSuperview|setFrame:' tweak/NativeLayout.xm tweak/CompactLayout.h; then
             echo 'Unexpected replacement-player behavior in native adapter'
             exit 1
           fi
@@ -33,7 +35,7 @@ jobs:
         run: brew install ldid dpkg
       - name: Install Theos
         run: git clone --recursive --depth 1 https://github.com/theos/theos.git "$THEOS"
-      - name: Build rootless package (iOS 16 and 26)
+      - name: Build rootless package for verified iOS 16.1.1
         run: |
           set -o pipefail
           xcodebuild -version

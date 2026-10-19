@@ -25,30 +25,8 @@ static BOOL MLLandscape(UIViewController *controller) {
     return size.width > size.height && size.height >= 240;
 }
 static void MLRestoreThreshold(void) {
-    MLRestoreWidth(MLWidthThreshold, &MLWidth);
+    // 0.4 uses phone compact layout; the native width threshold stays untouched.
 }
-static BOOL MLPrepareThreshold(UIViewController *controller) {
-    if (!MLInNativePlayer(controller) || !MLLandscape(controller)) { MLRestoreThreshold(); return NO; }
-    // 0 means Swift's once initializer has not run. Never overwrite uninitialized
-    // data or a value owned by another tweak. The first native layout initializes it.
-    CGSize size = controller.viewIfLoaded.window.bounds.size;
-    return MLApplyWidth(MLWidthThreshold, &MLWidth, size.width, size.height);
-}
-
-static UITraitCollection *MLNativeTraits(UIViewController *controller, UITraitCollection *original) {
-    if (!original || !MLInNativePlayer(controller) || !MLLandscape(controller)) return original;
-    // The disassembled iOS 16 classifier explicitly requires pad + regular.
-    // Limit the trait override to these native player controllers, not UIDevice,
-    // the application, library/browser screens or arbitrary UIView subclasses.
-    NSArray *cached = objc_getAssociatedObject(controller, &MLTraitCacheKey);
-    if (cached.count == 2 && cached[0] == original) return cached[1];
-    UITraitCollection *traits = [UITraitCollection traitCollectionWithTraitsFromCollections:@[
-        original, [UITraitCollection traitCollectionWithUserInterfaceIdiom:UIUserInterfaceIdiomPad],
-        [UITraitCollection traitCollectionWithHorizontalSizeClass:UIUserInterfaceSizeClassRegular]]];
-    objc_setAssociatedObject(controller, &MLTraitCacheKey, @[original, traits], OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-    return traits;
-}
-
 static UITraitCollection *MLPhoneTraits(UIViewController *controller, UITraitCollection *original) {
     if (!original || !MLInNativePlayer(controller) || !MLLandscape(controller)) return original;
     // Only the parent needs pad/regular to select splitView. Tablet metrics inside
@@ -100,6 +78,8 @@ static void MLRestoreLyricFonts(void) {
     }
     [MLChangedLyricLabels removeAllObjects];
 }
+
+#import "CompactLayout.h"
 
 static void MLRequestRotation(BOOL leaving) {
     if (MLRotationQueued) return;
@@ -158,7 +138,7 @@ static void MLRequestRotation(BOOL leaving) {
 }
 - (UITraitCollection *)traitCollection {
     UITraitCollection *original = %orig;
-    return MLNativeTraits(self, original);
+    return MLPhoneTraits(self, original);
 }
 - (UIInterfaceOrientationMask)supportedInterfaceOrientations {
     UIInterfaceOrientationMask original = %orig;
@@ -169,12 +149,9 @@ static void MLRequestRotation(BOOL leaving) {
     return MLInNativePlayer(self) ? YES : original;
 }
 - (void)viewDidLayoutSubviews {
-    if (!MLLandscape(self)) MLRestoreLyricFonts();
-    if (MLInNativePlayer(self)) MLPrepareThreshold(self);
+    if (!MLLandscape(self)) { MLRestoreLyricFonts(); MLRestoreCompactTree(self); }
     %orig;
-    // First layout may have initialized the native 1024 constant. Request just
-    // one follow-up pass when its value actually changes, never unconditionally.
-    if (MLInNativePlayer(self) && MLPrepareThreshold(self)) [[(UIViewController *)self view] setNeedsLayout];
+    if (MLHasHostedContent(self)) MLRestoreCompactTree(self);
 }
 - (void)viewWillDisappear:(BOOL)animated {
     if (self == MLActivePlayer) {
@@ -182,6 +159,7 @@ static void MLRequestRotation(BOOL leaving) {
         MLRequestRotation(YES);
         MLActivePlayer = nil;
         MLRestoreLyricFonts();
+        MLRestoreCompactTree(self);
     }
     %orig;
 }
@@ -190,6 +168,10 @@ static void MLRequestRotation(BOOL leaving) {
 - (UITraitCollection *)traitCollection {
     UITraitCollection *original = %orig;
     return MLPhoneTraits(self, original);
+}
+- (void)viewDidLayoutSubviews {
+    %orig;
+    MLApplyCompact(self);
 }
 %end
 %hook MLLegacyLyrics

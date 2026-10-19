@@ -1,8 +1,8 @@
 Package: com.justintunsday.musiclandscape
 Name: Music Landscape Native
-Version: 0.3.1~native1
+Version: 0.4.0~compact27-1
 Architecture: iphoneos-arm64
-Description: Native extended-player layout on verified iOS 16.1.1 MusicApplication images. No replacement player. Other system versions retain diagnostics only.
+Description: iOS 27 compact-landscape layout structure adapted to native iOS 16.1.1 Music views on verified images. Other versions retain diagnostics only.
 Maintainer: Justintunsday
 Author: Justintunsday
 Section: Tweaks
