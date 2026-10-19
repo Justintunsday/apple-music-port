@@ -72,5 +72,8 @@ phone sizing traits. It also caps native lyric labels at 26 points, retaining
 their font descriptor and native highlighting/timing. The cap is applied before
 native line measurement as well as label updates, so smaller text participates
 in wrapping and row sizing. Fonts are restored in portrait and on dismissal.
+The verified line's `sizeThatFits:` at `0x736eb4` forwards the proposed size
+directly to its label (`sel_sizeThatFits:`), confirming the font change is made
+before the native row-height measurement rather than visually scaling the text.
 No custom frames or replacement views are introduced. Rendering of this fix
 still requires on-device confirmation; CI cannot reproduce private Music UI.

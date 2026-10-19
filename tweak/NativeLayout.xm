@@ -53,10 +53,14 @@ static UITraitCollection *MLPhoneTraits(UIViewController *controller, UITraitCol
     if (!original || !MLInNativePlayer(controller) || !MLLandscape(controller)) return original;
     // Only the parent needs pad/regular to select splitView. Tablet metrics inside
     // that split reserve more vertical space than an SE's 375-point screen has.
-    return [UITraitCollection traitCollectionWithTraitsFromCollections:@[
+    NSArray *cached = objc_getAssociatedObject(controller, &MLTraitCacheKey);
+    if (cached.count == 2 && cached[0] == original) return cached[1];
+    UITraitCollection *traits = [UITraitCollection traitCollectionWithTraitsFromCollections:@[
         original, [UITraitCollection traitCollectionWithUserInterfaceIdiom:UIUserInterfaceIdiomPhone],
         [UITraitCollection traitCollectionWithHorizontalSizeClass:UIUserInterfaceSizeClassCompact],
         [UITraitCollection traitCollectionWithVerticalSizeClass:UIUserInterfaceSizeClassCompact]]];
+    objc_setAssociatedObject(controller, &MLTraitCacheKey, @[original, traits], OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    return traits;
 }
 
 static BOOL MLCompactLyricLabel(UILabel *label) {
