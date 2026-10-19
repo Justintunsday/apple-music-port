@@ -68,9 +68,17 @@ jobs:
           sleep 6
           mkdir -p prototype/screenshots
           xcrun simctl io "$UDID" screenshot prototype/screenshots/raw-ios27.png
-          sips -g pixelWidth -g pixelHeight prototype/screenshots/raw-ios27.png
-          sips -r 270 prototype/screenshots/raw-ios27.png --out prototype/screenshots/ios27.png >/dev/null
+          WIDTH=$(sips -g pixelWidth prototype/screenshots/raw-ios27.png | awk '/pixelWidth/ {print $2}')
+          HEIGHT=$(sips -g pixelHeight prototype/screenshots/raw-ios27.png | awk '/pixelHeight/ {print $2}')
+          echo "raw ${WIDTH}x${HEIGHT}"
+          if [ "$HEIGHT" -gt "$WIDTH" ]; then
+            sips -r 270 prototype/screenshots/raw-ios27.png --out prototype/screenshots/ios27.png >/dev/null
+          else
+            cp prototype/screenshots/raw-ios27.png prototype/screenshots/ios27.png
+          fi
           sips -g pixelWidth -g pixelHeight prototype/screenshots/ios27.png
+          xcodebuild -version > prototype/screenshots/runtime.txt
+          xcrun simctl list devices available | grep "$UDID" >> prototype/screenshots/runtime.txt || true
 
       - name: Upload screenshot
         if: always()
