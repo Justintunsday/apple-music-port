@@ -3,11 +3,10 @@
 #import <mach-o/dyld.h>
 #import "NativePolicy.h"
 
-// Reuse Apple's existing regularExtended/splitView player. No new player,
+// Adapt Apple's existing phone player to compact landscape. No new player,
 // artwork copy, playback IPC, view reparenting or synthetic lyric rendering.
 static __weak UIViewController *MLActivePlayer;
 static double *MLWidthThreshold;
-static MLWidthState MLWidth = {1024, false};
 static BOOL MLRotationQueued;
 static char MLTraitCacheKey;
 static char MLOriginalLyricFontKey;
@@ -24,13 +23,10 @@ static BOOL MLLandscape(UIViewController *controller) {
     CGSize size = controller.viewIfLoaded.window.bounds.size;
     return size.width > size.height && size.height >= 240;
 }
-static void MLRestoreThreshold(void) {
-    // 0.4 uses phone compact layout; the native width threshold stays untouched.
-}
 static UITraitCollection *MLPhoneTraits(UIViewController *controller, UITraitCollection *original) {
     if (!original || !MLInNativePlayer(controller) || !MLLandscape(controller)) return original;
-    // Only the parent needs pad/regular to select splitView. Tablet metrics inside
-    // that split reserve more vertical space than an SE's 375-point screen has.
+    // Keep phone metrics throughout; the compact adapter supplies column geometry
+    // without entering the tablet's regularExtended/splitView layout.
     NSArray *cached = objc_getAssociatedObject(controller, &MLTraitCacheKey);
     if (cached.count == 2 && cached[0] == original) return cached[1];
     UITraitCollection *traits = [UITraitCollection traitCollectionWithTraitsFromCollections:@[
@@ -155,7 +151,6 @@ static void MLRequestRotation(BOOL leaving) {
 }
 - (void)viewWillDisappear:(BOOL)animated {
     if (self == MLActivePlayer) {
-        MLRestoreThreshold();
         MLRequestRotation(YES);
         MLActivePlayer = nil;
         MLRestoreLyricFonts();
@@ -230,7 +225,7 @@ static void MLInstallNative(void) {
             [UIDevice.currentDevice beginGeneratingDeviceOrientationNotifications];
             [NSNotificationCenter.defaultCenter addObserverForName:UIDeviceOrientationDidChangeNotification object:nil
                 queue:NSOperationQueue.mainQueue usingBlock:^(NSNotification *note) { if (MLActivePlayer) MLRequestRotation(NO); }];
-            NSLog(@"[MusicLandscape Native] Verified 20B101 MusicApplication; native extended player enabled.");
+            NSLog(@"[MusicLandscape Native] Verified 20B101 MusicApplication; compact landscape adapter enabled.");
 }
 %ctor {
     @autoreleasepool {

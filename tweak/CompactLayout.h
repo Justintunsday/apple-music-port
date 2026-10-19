@@ -21,9 +21,10 @@ static UIView *MLNativeView(id controller, const char *name) {
 }
 static BOOL MLHasHostedContent(UIViewController *controller) {
     for (UIViewController *child in controller.childViewControllers) {
+        UIView *view = child.viewIfLoaded;
+        if (!view.superview || view.hidden || view.alpha <= .01) continue;
         NSString *name = NSStringFromClass(child.class);
-        if (([name containsString:@"LyricsViewController"] || [name containsString:@"QueueViewController"]) &&
-            child.viewIfLoaded.superview && !child.viewIfLoaded.hidden && child.viewIfLoaded.alpha > .01) return YES;
+        if ([name containsString:@"LyricsViewController"] || [name containsString:@"QueueViewController"]) return YES;
         if (MLHasHostedContent(child)) return YES;
     }
     return NO;
