@@ -109,7 +109,7 @@ static void MLRequestRotation(BOOL leaving) {
     %orig;
     // First layout may have initialized the native 1024 constant. Request just
     // one follow-up pass when its value actually changes, never unconditionally.
-    if (MLInNativePlayer(self) && MLPrepareThreshold(self)) [self.view setNeedsLayout];
+    if (MLInNativePlayer(self) && MLPrepareThreshold(self)) [[(UIViewController *)self view] setNeedsLayout];
 }
 - (void)viewWillDisappear:(BOOL)animated {
     if (self == MLActivePlayer) {
