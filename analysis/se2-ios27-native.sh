@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+# Static analysis of the iPhone SE 2 iOS 27.0.1 native player.
+set -euo pipefail
+OUT=out/27_0_1
+DEVICE="${1:-iPhone12,8}"
+mkdir -p "$OUT" firmware cache app
+run_to() { local seconds="$1"; shift; perl -e 'alarm shift; exec @ARGV' "$seconds" "$@"; }
+ipsw version | tee "$OUT/tool-version.txt"
+df -h .
+run_to 1800 ipsw download ipsw --device "$DEVICE" --build 24A446 --confirm -o firmware
+IPSW=$(find firmware -name '*.ipsw' -type f -print -quit)
+test -n "$IPSW"
+ipsw info "$IPSW" > "$OUT/firmware-info.txt"
+run_to 1200 ipsw extract "$IPSW" --dyld --dyld-arch arm64e -o cache
+DSC=$(find cache -type f -name dyld_shared_cache_arm64e -print -quit)
+test -n "$DSC"
+ipsw dyld info "$DSC" --dylibs > "$OUT/dsc-info.txt"
+grep -Ei 'Music|MediaCoreUI|MediaPlayer|MediaControls|NowPlaying' "$OUT/dsc-info.txt" > "$OUT/media-images.txt" || true
+# Unlike the newer OS, Music's UI may live in the app executable or embedded
+# frameworks. Extract these as well as shared-cache images.
+run_to 1200 ipsw extract "$IPSW" --files --pattern '(^|/)(Music|Media)(~iphone)?\.app/' -o app
+find app -type f > "$OUT/app-files.txt"
+while IFS= read -r binary; do
+    file "$binary" | grep -q 'Mach-O' || continue
+    name=$(basename "$binary")
+    echo "=== APP MACHO: $binary ==="
+    run_to 240 ipsw macho info "$binary" --objc --symbols --loads --swift > "$OUT/app-$name.txt" 2>&1 || true
+    otool -l "$binary" | grep -A5 -E 'LC_ENCRYPTION_INFO|LC_BUILD_VERSION' > "$OUT/app-$name-loads.txt" || true
+done < "$OUT/app-files.txt"
+for image in MediaCoreUI MediaPlayer MediaControls MusicUI MusicKit MusicKitInternal; do
+    echo "=== CACHE IMAGE: $image ==="
+    run_to 240 ipsw dyld macho "$DSC" "$image" --objc --symbols --strings > "$OUT/cache-$image.txt" 2>&1 || true
+done
+ipsw -V dyld macho "$DSC" MediaCoreUI --objc --swift --swift-all --symbols --loads > "$OUT/MediaCoreUI-native.txt" 2>&1
+ipsw dyld macho "$DSC" MediaCoreUI --extract --output "$OUT/frameworks"
+python3 analysis/summarize-native.py "$OUT"
+head -n 500 "$OUT/findings.txt"
+# Keep binaries as downloadable analysis artifacts, not as repository files.
+cp -R app "$OUT/app-binaries"

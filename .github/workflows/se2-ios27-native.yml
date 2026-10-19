@@ -1,0 +1,27 @@
+name: SE2 iOS 27 Native Player Analysis
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['analysis/se2-ios27-native.sh', '.github/workflows/se2-ios27-native.yml']
+permissions:
+  contents: read
+jobs:
+  analyze:
+    runs-on: macos-15
+    timeout-minutes: 100
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install firmware analysis tool
+        run: |
+          brew trust blacktop/tap || true
+          brew install blacktop/tap/ipsw
+      - name: Inspect iPhone12,8 iOS 27.0.1 (24A446)
+        run: bash analysis/se2-ios27-native.sh
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: se2-ios27-native-player-analysis
+          path: out/
+          retention-days: 30
+          if-no-files-found: error
