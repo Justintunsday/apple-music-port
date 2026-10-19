@@ -6,6 +6,7 @@ static char MLHostedControlsShownKey;
 @property(nonatomic, strong) NSArray<NSLayoutConstraint *> *constraints;
 @property(nonatomic, strong) NSMapTable<NSLayoutConstraint *, NSNumber *> *priorities;
 @property(nonatomic, strong) NSMapTable<UIView *, NSNumber *> *masks;
+@property(nonatomic, strong) NSMapTable<UIView *, NSNumber *> *visibility;
 @property(nonatomic, strong) NSArray<UIView *> *targets;
 @property(nonatomic, strong) NSArray<NSValue *> *targetRects;
 @property(nonatomic, strong) NSArray<UIView *> *ancestors;
@@ -49,6 +50,7 @@ static void MLRestoreCompact(UIViewController *controller) {
         if (active) constraint.active = YES;
     }
     for (UIView *view in state.masks) view.translatesAutoresizingMaskIntoConstraints = [state.masks objectForKey:view].boolValue;
+    for (UIView *view in state.visibility) view.hidden = [state.visibility objectForKey:view].boolValue;
     objc_setAssociatedObject(controller, &MLCompactStateKey, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
 }
 static void MLRestoreCompactTree(UIViewController *controller) {
@@ -139,6 +141,7 @@ static void MLApplyCompact(UIViewController *controller) {
         state.ancestors = ancestors.array;
         state.priorities = [NSMapTable weakToStrongObjectsMapTable];
         state.masks = [NSMapTable weakToStrongObjectsMapTable];
+        state.visibility = [NSMapTable weakToStrongObjectsMapTable];
         NSMutableArray *constraints = [NSMutableArray array];
         for (UIView *view in [targets arrayByAddingObjectsFromArray:ancestors.array]) {
             [state.masks setObject:@(view.translatesAutoresizingMaskIntoConstraints) forKey:view];
@@ -160,6 +163,13 @@ static void MLApplyCompact(UIViewController *controller) {
         }
         state.constraints = constraints;
         objc_setAssociatedObject(controller, &MLCompactStateKey, state, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    }
+    if (hosted) {
+        UIView *routeLabel = MLNativeView(controller, "routeLabel");
+        if (routeLabel) {
+            if (![state.visibility objectForKey:routeLabel]) [state.visibility setObject:@(routeLabel.hidden) forKey:routeLabel];
+            routeLabel.hidden = YES; // The compact bar retains the route picker icon.
+        }
     }
     NSArray *managed = [state.targets arrayByAddingObjectsFromArray:state.ancestors];
     for (UIView *owner in [state.ancestors arrayByAddingObjectsFromArray:[state.targets arrayByAddingObject:root]]) {
