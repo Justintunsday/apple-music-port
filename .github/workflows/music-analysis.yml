@@ -10,7 +10,7 @@ on:
   push:
     branches: [main]
     paths:
-      - "analysis/**"
+      - "analysis/run.sh"
       - ".github/workflows/music-analysis.yml"
 
 jobs:
