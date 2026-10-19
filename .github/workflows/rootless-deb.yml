@@ -42,7 +42,7 @@ jobs:
           test -f "$DYLIB"
           test -f package-check/var/jb/Library/MobileSubstrate/DynamicLibraries/MusicLandscape.plist
           test ! -d package-check/Library
-          lipo -verify_arch arm64 arm64e "$DYLIB"
+          lipo "$DYLIB" -verify_arch arm64 arm64e
           xcrun vtool -show-build "$DYLIB" | tee macho-build.txt
           grep -q 'minos 16.0' macho-build.txt
           otool -L "$DYLIB" | tee macho-libraries.txt
