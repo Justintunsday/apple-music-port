@@ -41,18 +41,35 @@ jobs:
             build
           ls -la "build/Build/Products/Debug-iphonesimulator/"
 
-      - name: Pick an iOS 27 iPhone simulator
+      - name: Pick an iOS 27 iPhone SE simulator
         id: sim
         run: |
-          UDID=$(xcrun simctl list devices available -j \
-            | jq -r '[.devices | to_entries[] | select(.key | test("iOS-27")) | .value[] | select(.name | startswith("iPhone"))][0].udid // empty')
+          RUNTIME=$(xcrun simctl list runtimes -j \
+            | jq -r '.runtimes[] | select(.identifier | test("iOS-27")) | .identifier' | head -n 1)
+          SE_TYPE=$(xcrun simctl list devicetypes -j \
+            | jq -r '.devicetypes[] | select(.name | test("iPhone SE \\(3rd generation\\)|iPhone SE \\(2nd generation\\)")) | .identifier' | head -n 1)
+          UDID=""
+          if [ -n "$RUNTIME" ] && [ -n "$SE_TYPE" ] && [ "$SE_TYPE" != "null" ]; then
+            UDID=$(xcrun simctl list devices -j \
+              | jq -r --arg rt "$RUNTIME" --arg dt "$SE_TYPE" \
+                '[.devices[] | to_entries[] | select(.key == $rt) | .value[] | select(.deviceTypeIdentifier == $dt and .isAvailable)][0].udid // empty')
+            if [ -z "$UDID" ]; then
+              UDID=$(xcrun simctl create "MusicLandscape-iPhoneSE" "$SE_TYPE" "$RUNTIME" || true)
+            fi
+          fi
+          if [ -z "$UDID" ]; then
+            echo "iPhone SE device type unavailable; falling back to a standard iPhone" >&2
+            UDID=$(xcrun simctl list devices available -j \
+              | jq -r '[.devices | to_entries[] | select(.key | test("iOS-27")) | .value[] | select(.name | startswith("iPhone"))][0].udid // empty')
+          fi
           if [ -z "$UDID" ]; then
             echo "No iOS 27 iPhone simulator found" >&2
-            xcrun simctl list devices available >&2
+            xcrun simctl list runtimes >&2
+            xcrun simctl list devicetypes >&2
             exit 1
           fi
           echo "udid=$UDID" >> "$GITHUB_OUTPUT"
-          xcrun simctl list devices available | grep "$UDID" || true
+          xcrun simctl list devices | grep "$UDID" || true
 
       - name: Boot, install, launch and screenshot
         run: |
