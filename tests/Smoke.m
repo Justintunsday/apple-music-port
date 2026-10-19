@@ -3,6 +3,7 @@
 #import "PlayerUnderTest.m"
 
 static atomic_int queries, commands, seeks, mode;
+static void (^slowCompletion)(CFDictionaryRef);
 static NSInteger layouts, beats;
 static UIDeviceOrientation testOrientation = UIDeviceOrientationLandscapeLeft;
 static NSMutableArray<NSString *> *failures;
@@ -16,8 +17,8 @@ static void after(double seconds, dispatch_block_t block) {
 static void mockInfo(dispatch_queue_t queue, void (^completion)(CFDictionaryRef)) {
     NSCAssert(!NSThread.isMainThread, @"Media IPC ran on main thread");
     atomic_fetch_add(&queries, 1);
-    double delay = atomic_load(&mode) == 0 ? 4.0 : 0.05;
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(delay * NSEC_PER_SEC)), queue, ^{
+    if (atomic_load(&mode) == 0) { slowCompletion = [completion copy]; return; }
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.05 * NSEC_PER_SEC)), queue, ^{
         NSDictionary *info = @{@"kMRMediaRemoteNowPlayingInfoTitle": @"Smoke track",
             @"kMRMediaRemoteNowPlayingInfoArtist": @"Test artist",
             @"kMRMediaRemoteNowPlayingInfoDuration": @180,
@@ -69,6 +70,7 @@ static void mockSeek(double position) {
     MLNativeController = self.window.rootViewController;
     check(MLIsPlayer(MLNativeController), @"Player detection failed");
     self.heartbeat = [NSTimer scheduledTimerWithTimeInterval:0.05 repeats:YES block:^(NSTimer *timer) { beats++; }];
+    MLUpdate();
     for (int i = 0; i < 100; i++) MLRequestUpdate();
     after(3.4, ^{
         check(MLPanel.superview == self.window, @"Overlay must be hosted outside native layout");
@@ -79,6 +81,10 @@ static void mockSeek(double position) {
         MLLandscape *oldPanel = MLPanel;
         [MLPanel close];
         check(!MLPanel && !oldPanel.superview, @"Close failed while request was outstanding");
+        dispatch_async(MLMediaQueue(), ^{
+            if (slowCompletion) slowCompletion(NULL);
+            slowCompletion = nil;
+        });
         after(1.0, ^{
             check(!MLPanel, @"Late callback recreated dismissed overlay");
             atomic_store(&mode, 1);
@@ -112,3 +118,4 @@ static void mockSeek(double position) {
 int main(int argc, char *argv[]) {
     @autoreleasepool { return UIApplicationMain(argc, argv, nil, NSStringFromClass(SmokeDelegate.class)); }
 }
+
