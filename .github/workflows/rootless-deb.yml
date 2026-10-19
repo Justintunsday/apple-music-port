@@ -76,9 +76,12 @@ jobs:
           xcodegen generate
           xcodebuild -project LandscapeSmoke.xcodeproj -scheme LandscapeSmoke -sdk iphonesimulator -configuration Debug -derivedDataPath build CODE_SIGNING_ALLOWED=NO build
       - name: Exercise slow media service, close, layout and playback
+        timeout-minutes: 5
         run: |
           set -euo pipefail
-          UDID=$(xcrun simctl list devices available -j | jq -r '[.devices[][] | select(.name | startswith("iPhone"))][0].udid')
+          SDK=$(xcrun --sdk iphonesimulator --show-sdk-version | tr '.' '-')
+          xcrun simctl list devices available
+          UDID=$(xcrun simctl list devices available -j | jq -r --arg runtime "iOS-$SDK" '[.devices | to_entries[] | select(.key | endswith($runtime)) | .value[] | select(.name | startswith("iPhone"))][0].udid')
           test -n "$UDID" && test "$UDID" != null
           xcrun simctl boot "$UDID" || true
           xcrun simctl bootstatus "$UDID" -b
@@ -98,3 +101,4 @@ jobs:
           name: simulator-regression-result
           path: smoke-result.txt
           if-no-files-found: warn
+
