@@ -20,6 +20,14 @@ jobs:
       THEOS: ${{ github.workspace }}/.theos-toolchain
     steps:
       - uses: actions/checkout@v4
+      - name: Check diagnostics-only source
+        run: |
+          test ! -f tweak/Tweak.xm
+          grep -q 'MusicLandscape_FILES = NativeDiagnostics.xm' tweak/Makefile
+          if grep -Eq 'MPMusicPlayerController|MRMediaRemote|%hook|setFrame:|setBounds:|setTransform:|activateConstraints:' tweak/NativeDiagnostics.xm; then
+            echo 'Unexpected playback or layout modification in diagnostic package'
+            exit 1
+          fi
       - name: Install build dependencies
         run: brew install ldid dpkg
       - name: Install Theos
@@ -54,7 +62,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: music-landscape-rootless-ios16-ios26
+          name: music-landscape-native-diagnostics-ios16-ios26
           path: |
             tweak/packages/*.deb
             tweak/packages/*.sha256
@@ -62,43 +70,4 @@ jobs:
             macho-*.txt
           if-no-files-found: error
           retention-days: 30
-
-  simulator-regression:
-    runs-on: macos-15
-    timeout-minutes: 25
-    steps:
-      - uses: actions/checkout@v4
-      - run: brew install xcodegen
-      - name: Build overlay regression host
-        run: |
-          python3 tests/prepare_smoke.py
-          cd tests
-          xcodegen generate
-          xcodebuild -project LandscapeSmoke.xcodeproj -scheme LandscapeSmoke -sdk iphonesimulator -configuration Debug -derivedDataPath build CODE_SIGNING_ALLOWED=NO build
-      - name: Exercise slow media service, close, layout and playback
-        timeout-minutes: 5
-        run: |
-          set -euo pipefail
-          SDK=$(xcrun --sdk iphonesimulator --show-sdk-version | tr '.' '-')
-          xcrun simctl list devices available
-          UDID=$(xcrun simctl list devices available -j | jq -r --arg runtime "iOS-$SDK" '[.devices | to_entries[] | select(.key | endswith($runtime)) | .value[] | select(.name | startswith("iPhone"))][0].udid')
-          test -n "$UDID" && test "$UDID" != null
-          xcrun simctl boot "$UDID" || true
-          xcrun simctl bootstatus "$UDID" -b
-          xcrun simctl install "$UDID" tests/build/Build/Products/Debug-iphonesimulator/LandscapeSmoke.app
-          xcrun simctl launch "$UDID" com.justintunsday.landscape.smoke
-          DATA=$(xcrun simctl get_app_container "$UDID" com.justintunsday.landscape.smoke data)
-          for attempt in {1..30}; do
-            if test -f "$DATA/Documents/smoke-result.txt"; then break; fi
-            sleep 1
-          done
-          cp "$DATA/Documents/smoke-result.txt" smoke-result.txt
-          cat smoke-result.txt
-          grep -qx PASS smoke-result.txt
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: simulator-regression-result
-          path: smoke-result.txt
-          if-no-files-found: warn
 

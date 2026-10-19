@@ -1,55 +1,46 @@
-# Music Landscape (experimental rootless tweak)
+# Native Apple Music layout investigation
 
-Targets **iOS 16.x and iOS 26.x only**, with arm64 and arm64e slices and an
-`iphoneos-arm64` Debian package installed under `/var/jb` by Theos.
-Requires an existing rootless jailbreak and working tweak injection into Apple
-Music. A successful build does not establish jailbreak availability or device compatibility.
+The requested feature is to reposition Apple's existing artwork, controls and
+lyrics views inside the native player on iOS 16 and iOS 26. The former 0.1.x
+custom-player overlay did not implement that feature and has been removed.
 
-This is a new UIKit implementation, not a binary transplant of iOS 27 frameworks.
-It displays current artwork, title, artist, playback position, seeking and
-previous/play/pause/next controls through dynamically resolved MediaRemote APIs. There are no
-sample tracks or placeholder lyrics. Native synchronized lyrics, queues and
-iOS 27 artwork effects are not implemented.
+**0.2.0~diagnostics1 captures the native view tree. It is not the finished native
+landscape modification.** It uses the same package identifier and dylib name to
+replace the old implementation. Fully terminate Music after installation.
+It does not modify frames, constraints, rotation policies or playback state.
 
-## Use
+## Capture on the real device
 
-Install the `.deb` with Sileo/Zebra, fully close and reopen Apple Music, open its
-full-screen player, then rotate the device to landscape. Portrait restores the
-native player. The down arrow hides the overlay until the next portrait rotation.
-The original view hierarchy is not reparented or modified.
+1. Install the rootless deb, fully close and reopen Apple Music.
+2. Open the native full-screen player in portrait. Rotate to landscape and wait
+   one second. Open the native lyrics panel and rotate once more.
+3. Double-tap with **three fingers** in Music to open the native share sheet.
+   Save `MusicLandscape-native-layout.json` to Files, then attach it to the
+   development conversation. The gesture may conflict with accessibility Zoom.
+4. After export, the report also exists inside Music's app data container at
+   `Library/Caches/MusicLandscape-native-layout.json`. Container UUIDs vary.
 
-Controller names can differ between OS releases. If automatic detection does not
-work, **double-tap with three fingers in Apple Music while holding the phone in
-landscape** to toggle the overlay manually. This gesture may conflict with system
-accessibility gestures. Native player detection logs its controller name with
-the `[MusicLandscape]` prefix. Unknown controller names require device inspection.
-When Music stays portrait-locked, the overlay rotates independently.
+The report includes instantiated controller/view class names, method names,
+frames, bounds, transforms, rotation state and constraint attributes. It omits
+label text, song metadata, lyric text, artwork, accounts, device identifiers and
+screenshots. No report is uploaded automatically.
 
-## Build
+Captures have a 1200-view/100-controller limit and a 75 ms traversal budget, with
+at most six automatic snapshots and eight retained snapshots per process. A
+truncation flag marks partial captures. JSON encoding and file writes run off
+the main thread. UIKit reads run on the main thread. Device behavior still
+requires verification.
 
-### 0.1.1: iOS 16.1.1 freeze mitigation
+## Next step
 
-The 0.1.0 package was reported to freeze Music when rotating on iOS 16.1.1.
-This version removes the `viewDidLayoutSubviews` hook entirely, coalesces updates
-outside controller callbacks, and hosts the overlay directly in the window.
-It also removes `MPMusicPlayerController` and all synchronous playback reads
-from the main thread. MediaRemote requests and controls run on a serial worker;
-metadata returns asynchronously, with one outstanding request and a three-second
-UI timeout. A stalled request is not repeatedly retried. The close button remains
-independent of playback services. Missing private APIs disable the related controls.
-The exact on-device cause has not been confirmed by a hang trace. These changes
-address two identified freeze risks, and still require retesting on iOS 16.1.1.
+Use the iOS 16.1.1 report to identify the real artwork, lyrics and controls, their
+container ownership, constraints and rotation policy. Implement a version-specific
+adapter and verify portrait restoration, dismissal and lyrics toggling. Obtain
+a separate report from the exact iOS 26 release before enabling its adapter.
+Static framework symbols alone do not establish the instantiated hierarchy.
 
-On macOS with Xcode, Theos and ldid installed:
+Build on macOS with Xcode and Theos:
 
 ```sh
 make -C tweak clean package FINALPACKAGE=1 THEOS_PACKAGE_SCHEME=rootless
 ```
-
-GitHub Actions builds against the installed Xcode SDK with deployment target
-16.0. Both OS versions use the same binary; the runtime restricts activation to
-major versions 16 and 26. CI verifies Mach-O slices, minimum OS version, package
-architecture and installation paths. **Playback, controller detection, rotation,
-DRM/cloud metadata, accessibility and lifecycle behavior remain untested on real
-iOS 16/26 devices.** The public music-player API may return incomplete metadata
-for some streaming content. Remove the package and restart Music to revert.

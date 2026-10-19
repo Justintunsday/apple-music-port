@@ -1,8 +1,8 @@
 Package: com.justintunsday.musiclandscape
-Name: Music Landscape
-Version: 0.1.1
+Name: Music Landscape Native Diagnostics
+Version: 0.2.0~diagnostics1
 Architecture: iphoneos-arm64
-Description: Experimental landscape player inside Apple Music for iOS 16 and 26. Native lyrics are not yet ported.
+Description: Native Music view hierarchy capture for iOS 16 and 26. No replacement player or layout modifications. Export with a three-finger double tap.
 Maintainer: Justintunsday
 Author: Justintunsday
 Section: Tweaks

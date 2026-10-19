@@ -1,3 +1,17 @@
+# Current implementation status
+
+Target: directly rearrange the native Apple Music player on **iOS 16 and iOS 26**.
+The previous 0.1.x custom-player overlay did not meet that goal and has been removed.
+
+The current deb (`0.2.0~diagnostics1`) **only captures native view hierarchies**;
+it does not implement the landscape layout yet. An iOS 16.1.1 device report is
+needed before choosing native hooks and constraints. See [capture instructions](tweak/README.md).
+
+The framework research below is historical static analysis, not evidence of
+working native layout support on either target OS.
+
+---
+
 # Music landscape player port (iOS 27 -> 26.6.2)
 
 Goal: bring the iOS 27 Apple Music **landscape full-screen player** (artwork on
