@@ -1,0 +1,23 @@
+name: LandscapeSmoke
+options:
+  deploymentTarget:
+    iOS: '16.0'
+targets:
+  LandscapeSmoke:
+    type: application
+    platform: iOS
+    sources:
+      - path: Smoke.m
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.justintunsday.landscape.smoke
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_UILaunchScreen_Generation: YES
+        TARGETED_DEVICE_FAMILY: '1'
+        CLANG_ENABLE_OBJC_ARC: YES
+        CODE_SIGNING_ALLOWED: NO
+schemes:
+  LandscapeSmoke:
+    build:
+      targets:
+        LandscapeSmoke: all

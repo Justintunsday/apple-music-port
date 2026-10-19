@@ -1,6 +1,6 @@
 Package: com.justintunsday.musiclandscape
 Name: Music Landscape
-Version: 0.1.0
+Version: 0.1.1
 Architecture: iphoneos-arm64
 Description: Experimental landscape player inside Apple Music for iOS 16 and 26. Native lyrics are not yet ported.
 Maintainer: Justintunsday

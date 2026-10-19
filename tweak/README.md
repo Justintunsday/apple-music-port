@@ -7,7 +7,7 @@ Music. A successful build does not establish jailbreak availability or device co
 
 This is a new UIKit implementation, not a binary transplant of iOS 27 frameworks.
 It displays current artwork, title, artist, playback position, seeking and
-previous/play/pause/next controls through the system music player. There are no
+previous/play/pause/next controls through dynamically resolved MediaRemote APIs. There are no
 sample tracks or placeholder lyrics. Native synchronized lyrics, queues and
 iOS 27 artwork effects are not implemented.
 
@@ -26,6 +26,19 @@ the `[MusicLandscape]` prefix. Unknown controller names require device inspectio
 When Music stays portrait-locked, the overlay rotates independently.
 
 ## Build
+
+### 0.1.1: iOS 16.1.1 freeze mitigation
+
+The 0.1.0 package was reported to freeze Music when rotating on iOS 16.1.1.
+This version removes the `viewDidLayoutSubviews` hook entirely, coalesces updates
+outside controller callbacks, and hosts the overlay directly in the window.
+It also removes `MPMusicPlayerController` and all synchronous playback reads
+from the main thread. MediaRemote requests and controls run on a serial worker;
+metadata returns asynchronously, with one outstanding request and a three-second
+UI timeout. A stalled request is not repeatedly retried. The close button remains
+independent of playback services. Missing private APIs disable the related controls.
+The exact on-device cause has not been confirmed by a hang trace. These changes
+address two identified freeze risks, and still require retesting on iOS 16.1.1.
 
 On macOS with Xcode, Theos and ldid installed:
 

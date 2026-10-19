@@ -7,5 +7,5 @@ include $(THEOS)/makefiles/common.mk
 TWEAK_NAME = MusicLandscape
 MusicLandscape_FILES = Tweak.xm
 MusicLandscape_CFLAGS = -fobjc-arc
-MusicLandscape_FRAMEWORKS = UIKit MediaPlayer
+MusicLandscape_FRAMEWORKS = UIKit
 include $(THEOS_MAKE_PATH)/tweak.mk
