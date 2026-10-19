@@ -20,12 +20,13 @@ jobs:
       THEOS: ${{ github.workspace }}/.theos-toolchain
     steps:
       - uses: actions/checkout@v4
-      - name: Check diagnostics-only source
+      - name: Check native policy and absence of replacement player
         run: |
           test ! -f tweak/Tweak.xm
-          grep -q 'MusicLandscape_FILES = NativeDiagnostics.xm' tweak/Makefile
-          if grep -Eq 'MPMusicPlayerController|MRMediaRemote|%hook|setFrame:|setBounds:|setTransform:|activateConstraints:' tweak/NativeDiagnostics.xm; then
-            echo 'Unexpected playback or layout modification in diagnostic package'
+          clang -std=c11 -Wall -Wextra -Werror tests/native-policy.c -o /tmp/music-native-policy
+          /tmp/music-native-policy
+          if grep -Eq 'MPMusicPlayerController|MRMediaRemote|addSubview:|insertSubview:|removeFromSuperview|setFrame:|activateConstraints:' tweak/NativeLayout.xm; then
+            echo 'Unexpected replacement-player behavior in native adapter'
             exit 1
           fi
       - name: Install build dependencies
@@ -62,7 +63,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: music-landscape-native-diagnostics-ios16-ios26
+          name: music-landscape-native-ios16-1-1
           path: |
             tweak/packages/*.deb
             tweak/packages/*.sha256
@@ -70,4 +71,3 @@ jobs:
             macho-*.txt
           if-no-files-found: error
           retention-days: 30
-

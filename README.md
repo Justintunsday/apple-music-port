@@ -1,17 +1,19 @@
-# Current implementation status
+# Native Apple Music landscape layout
 
-Target: directly rearrange the native Apple Music player on **iOS 16 and iOS 26**.
-The previous 0.1.x custom-player overlay did not meet that goal and has been removed.
+Target: modify Apple's existing full-screen player on iOS 16 and iOS 26.
+The former 0.1.x replacement-player overlay has been removed.
 
-The current deb (`0.2.0~diagnostics1`) **only captures native view hierarchies**;
-it does not implement the landscape layout yet. An iOS 16.1.1 device report is
-needed before choosing native hooks and constraints. See [capture instructions](tweak/README.md).
+**0.3.0~native1 implements an experimental, UUID-guarded iOS 16.1.1 adapter.**
+It reuses the native regularExtended/splitView player after analyzing the exact
+20B101 framework; no replacement player, copied artwork or playback IPC is used.
+See [analysis evidence](docs/native-layout-ios16.md) and [usage](tweak/README.md).
+Real-device layout validation on the iPhone SE 2 is still required. iOS 26 retains
+native diagnostics only until its different SwiftUI model is adapted.
 
-The framework research below is historical static analysis, not evidence of
-working native layout support on either target OS.
+The iOS 27 research below supplies the intended layout and version differences;
+it is not itself a drop-in binary port.
 
 ---
-
 # Music landscape player port (iOS 27 -> 26.6.2)
 
 Goal: bring the iOS 27 Apple Music **landscape full-screen player** (artwork on

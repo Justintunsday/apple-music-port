@@ -1,3 +1,25 @@
+# Native landscape adapter: 0.3.0~native1
+
+This version reuses Apple's own regularExtended/splitView player on **iOS 16.1.1
+(20B101), only when the MusicApplication UUID and arm64e image match**. It does
+not draw a replacement player. Artwork, playback controls, lyrics, queues and
+playback actions remain native.
+
+Install the rootless deb, fully terminate and reopen Music, open the full-screen
+player and rotate to landscape. Use the original lyrics button to show lyrics.
+Portrait/dismissal restores the original width gate and orientation policy.
+The frame/constraint geometry is still calculated by Apple's native code.
+
+See [binary analysis and implementation evidence](../docs/native-layout-ios16.md).
+The SE 2's short screen still requires real-device verification. CI tests validate
+binary identity/bounds and the width policy, not the actual Music UI. A different
+UUID leaves the native layout unchanged. **iOS 26 currently retains diagnostics
+only; the iOS 16 offsets and traits are not applied to it.**
+
+The capture instructions below remain available for investigating unsupported
+images and native layout problems; they describe the earlier diagnostic phase.
+
+---
 # Native Apple Music layout investigation
 
 The requested feature is to reposition Apple's existing artwork, controls and

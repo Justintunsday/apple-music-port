@@ -5,7 +5,7 @@ INSTALL_TARGET_PROCESSES = Music Media
 
 include $(THEOS)/makefiles/common.mk
 TWEAK_NAME = MusicLandscape
-MusicLandscape_FILES = NativeDiagnostics.xm
+MusicLandscape_FILES = NativeLayout.xm NativeDiagnostics.xm
 MusicLandscape_CFLAGS = -fobjc-arc
 MusicLandscape_FRAMEWORKS = UIKit
 include $(THEOS_MAKE_PATH)/tweak.mk
