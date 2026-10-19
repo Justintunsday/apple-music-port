@@ -41,7 +41,9 @@ addresses are evidence for this UUID only; they must never be applied to other i
 ## Implementation
 
 `NativeLayout.xm` keeps the existing player and its native constraints/actions.
-Only the native player's controllers report pad/regular traits in landscape.
+Only the native player parent reports pad/regular traits in landscape. Controls
+and lyrics explicitly retain phone/compact metrics: applying tablet metrics to
+them squeezed the controls together on the SE 2's 375-point landscape height.
 The verified extended-layout minimum becomes 640 points in landscape so an SE 2's
 667-point width can enter Apple's extended branch. The original 1024 value is
 restored on portrait or dismissal. The app's supported-orientation mask is extended
@@ -60,3 +62,15 @@ tests do not verify rendering, rotation or native gesture behavior on a real pho
 Apple's existing tablet constraints may still need phone-height adjustments after
 on-device evaluation. The iOS 26 implementation is structurally different and is
 not enabled by this iOS 16 adapter.
+
+## 0.3.1 SE 2 screenshot follow-up
+
+The first device screenshot confirms rotation and native synced lyrics work, but
+shows overlapping left controls and excessively large lyrics. This revision
+separates the parent's split-layout classifier traits from the child controllers'
+phone sizing traits. It also caps native lyric labels at 26 points, retaining
+their font descriptor and native highlighting/timing. The cap is applied before
+native line measurement as well as label updates, so smaller text participates
+in wrapping and row sizing. Fonts are restored in portrait and on dismissal.
+No custom frames or replacement views are introduced. Rendering of this fix
+still requires on-device confirmation; CI cannot reproduce private Music UI.

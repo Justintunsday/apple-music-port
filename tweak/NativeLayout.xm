@@ -10,6 +10,9 @@ static double *MLWidthThreshold;
 static MLWidthState MLWidth = {1024, false};
 static BOOL MLRotationQueued;
 static char MLTraitCacheKey;
+static char MLOriginalLyricFontKey;
+static NSHashTable<UILabel *> *MLChangedLyricLabels;
+static __weak UIView *MLMeasuringLyricLine;
 
 static BOOL MLInNativePlayer(UIViewController *controller) {
     if (!MLWidthThreshold || !MLActivePlayer) return NO;
@@ -46,6 +49,54 @@ static UITraitCollection *MLNativeTraits(UIViewController *controller, UITraitCo
     return traits;
 }
 
+static UITraitCollection *MLPhoneTraits(UIViewController *controller, UITraitCollection *original) {
+    if (!original || !MLInNativePlayer(controller) || !MLLandscape(controller)) return original;
+    // Only the parent needs pad/regular to select splitView. Tablet metrics inside
+    // that split reserve more vertical space than an SE's 375-point screen has.
+    return [UITraitCollection traitCollectionWithTraitsFromCollections:@[
+        original, [UITraitCollection traitCollectionWithUserInterfaceIdiom:UIUserInterfaceIdiomPhone],
+        [UITraitCollection traitCollectionWithHorizontalSizeClass:UIUserInterfaceSizeClassCompact],
+        [UITraitCollection traitCollectionWithVerticalSizeClass:UIUserInterfaceSizeClassCompact]]];
+}
+
+static BOOL MLCompactLyricLabel(UILabel *label) {
+    if (!MLWidthThreshold || !MLActivePlayer || !MLLandscape(MLActivePlayer) ||
+        (label.window != MLActivePlayer.viewIfLoaded.window && !MLMeasuringLyricLine)) return NO;
+    for (UIView *view = label.superview; view; view = view.superview) {
+        NSString *name = NSStringFromClass(view.class);
+        if ([name containsString:@"SyncedLyricsLineView"] || [name containsString:@"StaticLyrics"])
+            return view == MLMeasuringLyricLine || [label isDescendantOfView:MLActivePlayer.viewIfLoaded];
+    }
+    return NO;
+}
+
+static UIFont *MLLyricFont(UILabel *label, UIFont *font) {
+    if (!font || !MLCompactLyricLabel(label)) return font;
+    if (!objc_getAssociatedObject(label, &MLOriginalLyricFontKey))
+        objc_setAssociatedObject(label, &MLOriginalLyricFontKey, font, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    if (!MLChangedLyricLabels) MLChangedLyricLabels = [NSHashTable weakObjectsHashTable];
+    [MLChangedLyricLabels addObject:label];
+    return font.pointSize > 26 ? [font fontWithSize:26] : font;
+}
+
+static void MLUpdateLyricLabels(UIView *view) {
+    if ([view isKindOfClass:UILabel.class]) {
+        UILabel *label = (UILabel *)view;
+        UIFont *font = MLLyricFont(label, label.font);
+        if (![font isEqual:label.font]) label.font = font;
+    }
+    for (UIView *child in view.subviews) MLUpdateLyricLabels(child);
+}
+
+static void MLRestoreLyricFonts(void) {
+    for (UILabel *label in MLChangedLyricLabels.allObjects) {
+        UIFont *font = objc_getAssociatedObject(label, &MLOriginalLyricFontKey);
+        objc_setAssociatedObject(label, &MLOriginalLyricFontKey, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        if (font) label.font = font;
+    }
+    [MLChangedLyricLabels removeAllObjects];
+}
+
 static void MLRequestRotation(BOOL leaving) {
     if (MLRotationQueued) return;
     MLRotationQueued = YES;
@@ -75,8 +126,15 @@ static void MLRequestRotation(BOOL leaving) {
 @interface MLLegacyPlayer : UIViewController @end
 @interface MLLegacyControls : UIViewController @end
 @interface MLLegacyLyrics : UIViewController @end
+@interface MLLegacyLyricLine : UIControl @end
 
 %group LegacyNative
+%hook UILabel
+- (void)setFont:(UIFont *)font {
+    UIFont *adjusted = MLLyricFont(self, font);
+    %orig(adjusted);
+}
+%end
 %hook UIApplication
 - (UIInterfaceOrientationMask)supportedInterfaceOrientationsForWindow:(UIWindow *)window {
     UIInterfaceOrientationMask original = %orig;
@@ -107,6 +165,7 @@ static void MLRequestRotation(BOOL leaving) {
     return MLInNativePlayer(self) ? YES : original;
 }
 - (void)viewDidLayoutSubviews {
+    if (!MLLandscape(self)) MLRestoreLyricFonts();
     if (MLInNativePlayer(self)) MLPrepareThreshold(self);
     %orig;
     // First layout may have initialized the native 1024 constant. Request just
@@ -118,6 +177,7 @@ static void MLRequestRotation(BOOL leaving) {
         MLRestoreThreshold();
         MLRequestRotation(YES);
         MLActivePlayer = nil;
+        MLRestoreLyricFonts();
     }
     %orig;
 }
@@ -125,13 +185,31 @@ static void MLRequestRotation(BOOL leaving) {
 %hook MLLegacyControls
 - (UITraitCollection *)traitCollection {
     UITraitCollection *original = %orig;
-    return MLNativeTraits(self, original);
+    return MLPhoneTraits(self, original);
 }
 %end
 %hook MLLegacyLyrics
 - (UITraitCollection *)traitCollection {
     UITraitCollection *original = %orig;
-    return MLNativeTraits(self, original);
+    return MLPhoneTraits(self, original);
+}
+- (void)viewDidLayoutSubviews {
+    MLUpdateLyricLabels([(UIViewController *)self view]);
+    %orig;
+}
+%end
+%hook MLLegacyLyricLine
+- (CGSize)sizeThatFits:(CGSize)size {
+    UIView *previous = MLMeasuringLyricLine;
+    MLMeasuringLyricLine = self;
+    MLUpdateLyricLabels(self);
+    CGSize result = %orig;
+    MLMeasuringLyricLine = previous;
+    return result;
+}
+- (void)layoutSubviews {
+    MLUpdateLyricLabels(self);
+    %orig;
 }
 %end
 %end
@@ -156,12 +234,13 @@ static void MLInstallNative(void) {
             Class player = NSClassFromString(@"MusicApplication.NowPlayingViewController") ?: NSClassFromString(@"_TtC16MusicApplication24NowPlayingViewController");
             Class controls = NSClassFromString(@"MusicNowPlayingControlsViewController");
             Class lyrics = NSClassFromString(@"MusicNowPlayingLyricsViewController");
-            if (!MLWidthThreshold || !player || !controls || !lyrics) {
+            Class line = NSClassFromString(@"_TtC16MusicApplication20SyncedLyricsLineView");
+            if (!MLWidthThreshold || !player || !controls || !lyrics || !line) {
                 MLWidthThreshold = NULL;
                 NSLog(@"[MusicLandscape Native] Framework identity or native classes do not match; native layout unchanged.");
                 return;
             }
-            %init(LegacyNative, MLLegacyPlayer=player, MLLegacyControls=controls, MLLegacyLyrics=lyrics);
+            %init(LegacyNative, MLLegacyPlayer=player, MLLegacyControls=controls, MLLegacyLyrics=lyrics, MLLegacyLyricLine=line);
             [UIDevice.currentDevice beginGeneratingDeviceOrientationNotifications];
             [NSNotificationCenter.defaultCenter addObserverForName:UIDeviceOrientationDidChangeNotification object:nil
                 queue:NSOperationQueue.mainQueue usingBlock:^(NSNotification *note) { if (MLActivePlayer) MLRequestRotation(NO); }];
