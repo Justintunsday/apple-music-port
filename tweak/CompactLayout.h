@@ -1,6 +1,7 @@
 #import "CompactGeometry.h"
 
 static char MLCompactStateKey;
+static char MLHostedControlsShownKey;
 @interface MLCompactState : NSObject
 @property(nonatomic, strong) NSArray<NSLayoutConstraint *> *constraints;
 @property(nonatomic, strong) NSMapTable<NSLayoutConstraint *, NSNumber *> *priorities;
@@ -52,6 +53,7 @@ static void MLRestoreCompact(UIViewController *controller) {
 }
 static void MLRestoreCompactTree(UIViewController *controller) {
     MLRestoreCompact(controller);
+    objc_setAssociatedObject(controller, &MLHostedControlsShownKey, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     for (UIViewController *child in controller.childViewControllers) MLRestoreCompactTree(child);
 }
 static NSArray<NSLayoutConstraint *> *MLPinRect(UIView *view, UIView *root, MLRect rect) {
@@ -188,7 +190,6 @@ static void MLApplyCompact(UIViewController *controller) {
 @protocol MLNativeControlsVisibility <NSObject>
 - (void)setControlsHidden:(BOOL)hidden animator:(id)animator;
 @end
-static char MLHostedControlsShownKey;
 static UIViewController *MLFindControls(UIViewController *parent) {
     Class nativeClass = NSClassFromString(@"MusicNowPlayingControlsViewController");
     if (nativeClass && [parent isKindOfClass:nativeClass]) return parent;
