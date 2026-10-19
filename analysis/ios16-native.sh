@@ -13,7 +13,7 @@ ipsw info "$IPSW" > "$OUT/firmware-info.txt"
 run_to 1200 ipsw extract "$IPSW" --dyld --dyld-arch arm64e -o cache
 DSC=$(find cache -type f -name dyld_shared_cache_arm64e -print -quit)
 test -n "$DSC"
-ipsw dyld info "$DSC" > "$OUT/dsc-info.txt"
+ipsw dyld info "$DSC" --dylibs > "$OUT/dsc-info.txt"
 grep -Ei 'Music|MediaCoreUI|MediaPlayer|MediaControls|NowPlaying' "$OUT/dsc-info.txt" > "$OUT/media-images.txt" || true
 # Unlike the newer OS, Music's UI may live in the app executable or embedded
 # frameworks. Extract these as well as shared-cache images.
@@ -31,7 +31,6 @@ for image in MediaCoreUI MediaPlayer MediaControls MusicUI MusicKit MusicKitInte
     run_to 240 ipsw dyld macho "$DSC" "$image" --objc --symbols --strings > "$OUT/cache-$image.txt" 2>&1 || true
 done
 python3 analysis/summarize-native.py "$OUT"
-cat "$OUT/findings.txt"
+head -n 500 "$OUT/findings.txt"
 # Keep binaries as downloadable analysis artifacts, not as repository files.
 cp -R app "$OUT/app-binaries"
-
