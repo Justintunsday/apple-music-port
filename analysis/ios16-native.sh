@@ -17,7 +17,7 @@ ipsw dyld info "$DSC" > "$OUT/dsc-info.txt"
 grep -Ei 'Music|MediaCoreUI|MediaPlayer|MediaControls|NowPlaying' "$OUT/dsc-info.txt" > "$OUT/media-images.txt" || true
 # Unlike the newer OS, Music's UI may live in the app executable or embedded
 # frameworks. Extract these as well as shared-cache images.
-run_to 1200 ipsw extract "$IPSW" --files --pattern 'Applications/(Music|Media)\.app/(Music|Media|Info\.plist|Frameworks/.*)$' -o app
+run_to 1200 ipsw extract "$IPSW" --files --pattern '(^|/)(Music|Media)(~iphone)?\.app/' -o app
 find app -type f > "$OUT/app-files.txt"
 while IFS= read -r binary; do
     file "$binary" | grep -q 'Mach-O' || continue
@@ -34,3 +34,4 @@ python3 analysis/summarize-native.py "$OUT"
 cat "$OUT/findings.txt"
 # Keep binaries as downloadable analysis artifacts, not as repository files.
 cp -R app "$OUT/app-binaries"
+
