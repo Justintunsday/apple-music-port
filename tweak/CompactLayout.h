@@ -13,6 +13,8 @@ static char MLHostedControlsShownKey;
 @property(nonatomic) BOOL hosted;
 @property(nonatomic) CGSize canvasSize;
 @property(nonatomic) UIEdgeInsets safeArea;
+@property(nonatomic) BOOL restoreClipping;
+@property(nonatomic) BOOL originalClipping;
 @end
 @implementation MLCompactState
 @end
@@ -51,6 +53,7 @@ static void MLRestoreCompact(UIViewController *controller) {
     }
     for (UIView *view in state.masks) view.translatesAutoresizingMaskIntoConstraints = [state.masks objectForKey:view].boolValue;
     for (UIView *view in state.visibility) view.hidden = [state.visibility objectForKey:view].boolValue;
+    if (state.restoreClipping) state.targets.firstObject.clipsToBounds = state.originalClipping;
     objc_setAssociatedObject(controller, &MLCompactStateKey, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
 }
 static void MLRestoreCompactTree(UIViewController *controller) {
@@ -268,6 +271,9 @@ static void MLUpdateHostedLayout(UIViewController *player) {
         state.canvasSize = root.bounds.size;
         state.safeArea = safe;
         state.targets = @[host];
+        state.restoreClipping = YES;
+        state.originalClipping = host.clipsToBounds;
+        host.clipsToBounds = YES;
         state.masks = [NSMapTable weakToStrongObjectsMapTable];
         [state.masks setObject:@(host.translatesAutoresizingMaskIntoConstraints) forKey:host];
         host.translatesAutoresizingMaskIntoConstraints = NO;
