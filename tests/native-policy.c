@@ -41,5 +41,18 @@ int main(void) {
     assert(MLDesiredWidth(375, 667) == 1024); // Portrait restores Apple's original threshold.
     assert(MLDesiredWidth(0, 0) == 1024);
     assert(MLDesiredWidth(NAN, 375) == 1024);
-    puts("PASS: UUID, architecture, writable segment, bounds, malformed commands, SE2 and portrait policies");
+    MLWidthState state = {1024, false};
+    double widthGate = 0;
+    assert(!MLApplyWidth(&widthGate, &state, 667, 375) && widthGate == 0);
+    widthGate = 1024; // Native Swift initializer runs during the first layout.
+    assert(MLApplyWidth(&widthGate, &state, 667, 375) && widthGate == 640);
+    for (int i = 0; i < 1000; i++) assert(!MLApplyWidth(&widthGate, &state, 667, 375));
+    assert(MLApplyWidth(&widthGate, &state, 375, 667) && widthGate == 1024);
+    assert(!MLRestoreWidth(&widthGate, &state));
+    assert(MLApplyWidth(&widthGate, &state, 667, 375));
+    widthGate = 900; // Do not overwrite a later value owned by another component.
+    assert(!MLRestoreWidth(&widthGate, &state) && widthGate == 900);
+    assert(!MLApplyWidth(&widthGate, &state, 667, 375));
+    assert(!MLApplyWidth(NULL, &state, 667, 375));
+    puts("PASS: image guards, SE2, portrait/dismissal restoration, uninitialized data and layout idempotence");
 }

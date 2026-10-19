@@ -1,7 +1,8 @@
 # iOS 16.1.1 native player investigation
 
-Firmware: iOS 16.1.1, build 20B101. First extraction: iPhone14,5. A second
-extraction targets the user's iPhone SE 2 (`iPhone12,8`) to validate image identity.
+Firmware: iOS 16.1.1, build 20B101. Independently extracted from iPhone14,5 and
+the user's iPhone SE 2 target (`iPhone12,8`). Both framework binaries have the
+same UUID and SHA-256 `458dbb35396b750073b3df4f38a5d46e0afc5406a8a7742e45dc77742e4e5572`.
 Reproduce with `analysis/ios16-native.sh`; artifacts retain the binary and dumps.
 
 ## Evidence
@@ -10,7 +11,7 @@ The real implementation is in the staged Music app's embedded
 `Frameworks/MusicApplication.framework/MusicApplication`, not the small Music
 launcher or the modern shared-cache MediaCoreUI player implementation.
 
-The extracted arm64e image UUID is `AC7AFBA5-DD53-3CB8-A146-5D975BB3AD1B`.
+The verified SE 2 arm64e image UUID is `AC7AFBA5-DD53-3CB8-A146-5D975BB3AD1B`.
 The app's phone Info.plist permits only portrait, while its iPad orientation list
 includes landscape.
 

@@ -7,8 +7,7 @@
 // artwork copy, playback IPC, view reparenting or synthetic lyric rendering.
 static __weak UIViewController *MLActivePlayer;
 static double *MLWidthThreshold;
-static double MLLastWidth = 1024;
-static BOOL MLThresholdOwned;
+static MLWidthState MLWidth = {1024, false};
 static BOOL MLRotationQueued;
 static char MLTraitCacheKey;
 static UIInterfaceOrientationMask (*MLOriginalAppMask)(id, SEL, UIApplication *, UIWindow *);
@@ -24,24 +23,14 @@ static BOOL MLLandscape(UIViewController *controller) {
     return size.width > size.height && size.height >= 240;
 }
 static void MLRestoreThreshold(void) {
-    if (MLThresholdOwned && MLWidthThreshold && fabs(*MLWidthThreshold - MLLastWidth) < 0.01)
-        *MLWidthThreshold = 1024;
-    MLThresholdOwned = NO;
-    MLLastWidth = 1024;
+    MLRestoreWidth(MLWidthThreshold, &MLWidth);
 }
 static BOOL MLPrepareThreshold(UIViewController *controller) {
     if (!MLInNativePlayer(controller) || !MLLandscape(controller)) { MLRestoreThreshold(); return NO; }
-    double current = *MLWidthThreshold;
-    double desired = MLDesiredWidth(controller.viewIfLoaded.window.bounds.size.width,
-                                    controller.viewIfLoaded.window.bounds.size.height);
-    if (fabs(current - desired) < 0.01) return NO;
     // 0 means Swift's once initializer has not run. Never overwrite uninitialized
     // data or a value owned by another tweak. The first native layout initializes it.
-    if (fabs(current - 1024) >= 0.01 && !(MLThresholdOwned && fabs(current - MLLastWidth) < 0.01)) return NO;
-    *MLWidthThreshold = desired;
-    MLLastWidth = desired;
-    MLThresholdOwned = YES;
-    return YES;
+    CGSize size = controller.viewIfLoaded.window.bounds.size;
+    return MLApplyWidth(MLWidthThreshold, &MLWidth, size.width, size.height);
 }
 
 static UITraitCollection *MLNativeTraits(UIViewController *controller, UITraitCollection *original) {
@@ -103,11 +92,18 @@ static void MLRequestRotation(BOOL leaving) {
     %orig;
     if (MLWidthThreshold) { MLActivePlayer = self; MLRequestRotation(NO); }
 }
-- (UITraitCollection *)traitCollection { return MLNativeTraits(self, %orig); }
-- (UIInterfaceOrientationMask)supportedInterfaceOrientations {
-    return MLInNativePlayer(self) ? UIInterfaceOrientationMaskAllButUpsideDown : %orig;
+- (UITraitCollection *)traitCollection {
+    UITraitCollection *original = %orig;
+    return MLNativeTraits(self, original);
 }
-- (BOOL)shouldAutorotate { return MLInNativePlayer(self) ? YES : %orig; }
+- (UIInterfaceOrientationMask)supportedInterfaceOrientations {
+    UIInterfaceOrientationMask original = %orig;
+    return MLInNativePlayer(self) ? UIInterfaceOrientationMaskAllButUpsideDown : original;
+}
+- (BOOL)shouldAutorotate {
+    BOOL original = %orig;
+    return MLInNativePlayer(self) ? YES : original;
+}
 - (void)viewDidLayoutSubviews {
     if (MLInNativePlayer(self)) MLPrepareThreshold(self);
     %orig;
@@ -125,10 +121,16 @@ static void MLRequestRotation(BOOL leaving) {
 }
 %end
 %hook MLLegacyControls
-- (UITraitCollection *)traitCollection { return MLNativeTraits(self, %orig); }
+- (UITraitCollection *)traitCollection {
+    UITraitCollection *original = %orig;
+    return MLNativeTraits(self, original);
+}
 %end
 %hook MLLegacyLyrics
-- (UITraitCollection *)traitCollection { return MLNativeTraits(self, %orig); }
+- (UITraitCollection *)traitCollection {
+    UITraitCollection *original = %orig;
+    return MLNativeTraits(self, original);
+}
 %end
 %end
 
@@ -136,7 +138,7 @@ static double *MLFindWidthThreshold(void) {
     for (uint32_t index = 0; index < _dyld_image_count(); index++) {
         const char *name = _dyld_get_image_name(index);
         if (!name || ![[NSString stringWithUTF8String:name] hasSuffix:@"/MusicApplication.framework/MusicApplication"]) continue;
-        const struct mach_header_64 *header = (const void *)_dyld_get_image_header(index);
+        const struct mach_header_64 *header = (const struct mach_header_64 *)_dyld_get_image_header(index);
         size_t size = sizeof(*header) + header->sizeofcmds;
         if (size > 128 * 1024 || !MLValidateImage(header, size)) return NULL;
         return (double *)(ML_WIDTH_VADDR + _dyld_get_image_vmaddr_slide(index));
