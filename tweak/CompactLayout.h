@@ -23,6 +23,11 @@ static BOOL MLHasHostedContent(UIViewController *controller) {
     for (UIViewController *child in controller.childViewControllers) {
         UIView *view = child.viewIfLoaded;
         if (!view.superview || view.hidden || view.alpha <= .01) continue;
+        BOOL hiddenAncestor = NO;
+        for (UIView *parent = view.superview; parent && parent != MLActivePlayer.viewIfLoaded; parent = parent.superview)
+            if (parent.hidden || parent.alpha <= .01) { hiddenAncestor = YES; break; }
+        if (hiddenAncestor || !CGRectIntersectsRect([view convertRect:view.bounds toView:MLActivePlayer.viewIfLoaded],
+                                                     MLActivePlayer.viewIfLoaded.bounds)) continue;
         NSString *name = NSStringFromClass(child.class);
         if ([name containsString:@"LyricsViewController"] || [name containsString:@"QueueViewController"]) return YES;
         if (MLHasHostedContent(child)) return YES;

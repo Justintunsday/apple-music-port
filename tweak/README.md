@@ -1,3 +1,22 @@
+# 0.4.0 compact-landscape adapter for iOS 16.1.1
+
+Install the rootless `0.4.0~compact27-1` deb, then fully close and reopen Music.
+Test normal playback in both landscape directions, then open/close native lyrics
+and queue, return to portrait and dismiss the player. Disable other Music layout
+tweaks during this comparison. Lyrics use a maximum 26-point native font.
+
+This version replaces the earlier tablet-layout selection with phone metrics and
+native-view constraints based on iOS 27 compact-landscape component structure.
+It does not copy iOS 27 SwiftUI code or framework binaries into iOS 16.
+The image UUID must match the analyzed 20B101 MusicApplication binary.
+
+Use the existing three-finger double tap to export hierarchy diagnostics if the
+private hierarchy differs or controls are missing. CI checks package structure,
+binary identity guards and non-overlapping geometry; it cannot confirm the UI.
+
+The sections below document earlier experimental versions.
+
+---
 # Native landscape adapter: 0.3.0~native1
 
 This version reuses Apple's own regularExtended/splitView player on **iOS 16.1.1
