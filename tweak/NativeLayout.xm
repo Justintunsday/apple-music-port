@@ -10,7 +10,6 @@ static double *MLWidthThreshold;
 static MLWidthState MLWidth = {1024, false};
 static BOOL MLRotationQueued;
 static char MLTraitCacheKey;
-static UIInterfaceOrientationMask (*MLOriginalAppMask)(id, SEL, UIApplication *, UIWindow *);
 
 static BOOL MLInNativePlayer(UIViewController *controller) {
     if (!MLWidthThreshold || !MLActivePlayer) return NO;
@@ -47,11 +46,6 @@ static UITraitCollection *MLNativeTraits(UIViewController *controller, UITraitCo
     return traits;
 }
 
-static UIInterfaceOrientationMask MLAppMask(id delegate, SEL selector, UIApplication *app, UIWindow *window) {
-    if (MLWidthThreshold && MLActivePlayer && MLActivePlayer.viewIfLoaded.window == window)
-        return UIInterfaceOrientationMaskAllButUpsideDown;
-    return MLOriginalAppMask ? MLOriginalAppMask(delegate, selector, app, window) : UIInterfaceOrientationMaskPortrait;
-}
 static void MLRequestRotation(BOOL leaving) {
     if (MLRotationQueued) return;
     MLRotationQueued = YES;
@@ -83,6 +77,14 @@ static void MLRequestRotation(BOOL leaving) {
 @interface MLLegacyLyrics : UIViewController @end
 
 %group LegacyNative
+%hook UIApplication
+- (UIInterfaceOrientationMask)supportedInterfaceOrientationsForWindow:(UIWindow *)window {
+    UIInterfaceOrientationMask original = %orig;
+    if (MLWidthThreshold && MLActivePlayer && MLActivePlayer.viewIfLoaded.window == window)
+        return UIInterfaceOrientationMaskAllButUpsideDown;
+    return original;
+}
+%end
 %hook MLLegacyPlayer
 - (void)viewWillAppear:(BOOL)animated {
     if (MLWidthThreshold) MLActivePlayer = self;
@@ -160,13 +162,6 @@ static void MLInstallNative(void) {
                 return;
             }
             %init(LegacyNative, MLLegacyPlayer=player, MLLegacyControls=controls, MLLegacyLyrics=lyrics);
-            id delegate = UIApplication.sharedApplication.delegate;
-            SEL selector = @selector(application:supportedInterfaceOrientationsForWindow:);
-            Class delegateClass = [delegate class];
-            if (!delegateClass) { MLWidthThreshold = NULL; return; }
-            if (class_getInstanceMethod(delegateClass, selector))
-                MSHookMessageEx(delegateClass, selector, (IMP)MLAppMask, (IMP *)&MLOriginalAppMask);
-            else class_addMethod(delegateClass, selector, (IMP)MLAppMask, "Q@:@@");
             [UIDevice.currentDevice beginGeneratingDeviceOrientationNotifications];
             [NSNotificationCenter.defaultCenter addObserverForName:UIDeviceOrientationDidChangeNotification object:nil
                 queue:NSOperationQueue.mainQueue usingBlock:^(NSNotification *note) { if (MLActivePlayer) MLRequestRotation(NO); }];

@@ -44,7 +44,7 @@ addresses are evidence for this UUID only; they must never be applied to other i
 Only the native player's controllers report pad/regular traits in landscape.
 The verified extended-layout minimum becomes 640 points in landscape so an SE 2's
 667-point width can enter Apple's extended branch. The original 1024 value is
-restored on portrait or dismissal. The app delegate's orientation mask is extended
+restored on portrait or dismissal. The app's supported-orientation mask is extended
 only while the native full-screen player is active; scene geometry requests use
 UIKit's iOS 16 API.
 
