@@ -30,7 +30,9 @@ static UIButton *MLButton(NSString *symbol, NSString *label, id target, SEL acti
     button.accessibilityLabel = label;
     button.contentVerticalAlignment = UIControlContentVerticalAlignmentFill;
     button.contentHorizontalAlignment = UIControlContentHorizontalAlignmentFill;
-    button.contentEdgeInsets = UIEdgeInsetsMake(12, 12, 12, 12);
+    UIButtonConfiguration *configuration = [UIButtonConfiguration plainButtonConfiguration];
+    configuration.contentInsets = NSDirectionalEdgeInsetsMake(12, 12, 12, 12);
+    button.configuration = configuration;
     [button addTarget:target action:action forControlEvents:UIControlEventTouchUpInside];
     return button;
 }
