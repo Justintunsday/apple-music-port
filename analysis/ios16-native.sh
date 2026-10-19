@@ -2,11 +2,12 @@
 # Static analysis of the exact iOS 16.1.1 build used by the reported device.
 set -euo pipefail
 OUT=out/16_1_1
+DEVICE="${1:-iPhone12,8}"
 mkdir -p "$OUT" firmware cache app
 run_to() { local seconds="$1"; shift; perl -e 'alarm shift; exec @ARGV' "$seconds" "$@"; }
 ipsw version | tee "$OUT/tool-version.txt"
 df -h .
-run_to 1800 ipsw download ipsw --device iPhone14,5 --build 20B101 --confirm -o firmware
+run_to 1800 ipsw download ipsw --device "$DEVICE" --build 20B101 --confirm -o firmware
 IPSW=$(find firmware -name '*.ipsw' -type f -print -quit)
 test -n "$IPSW"
 ipsw info "$IPSW" > "$OUT/firmware-info.txt"
